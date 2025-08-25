@@ -6,10 +6,6 @@ __pycache__/
 # Virtual environment
 .venv/
 
-# VS Code settings (keep only workspace settings if needed)
-.vscode/
-!.vscode/settings.json
-
 # Distribution / packaging
 build/
 dist/
