@@ -90,7 +90,6 @@ class InputController:
                         print(f"Could not grab {path} ({d.name}): {e}")
                         continue
 
-                    # Store device capabilities for normalization
                     abs_info = {}
                     if ecodes.EV_ABS in d.capabilities():
                         for code, info in d.capabilities()[ecodes.EV_ABS]:
@@ -99,6 +98,7 @@ class InputController:
                                 "max": info.max,
                                 "fuzz": info.fuzz,
                                 "flat": info.flat,
+                                "default": info.value,
                             }
                     self._device_info[d.path] = {"abs_info": abs_info}
 
@@ -123,6 +123,11 @@ class InputController:
             if abs_info:
                 min_val = abs_info["min"]
                 max_val = abs_info["max"]
+                default_val = abs_info["default"]
+
+                if value == default_val:
+                    return 0.0
+
                 # Apply deadzone using flat value if available
                 flat = abs_info["flat"]
                 if flat > 0:
