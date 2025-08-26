@@ -30,18 +30,50 @@
         halign: 'center'
 
 <ValueDisplay>:
-    orientation: 'horizontal'
-    padding: 20
-    spacing: 20
+    padding: 10
+    spacing: 10
 
-    AxisSlider:
-        id: x_slider
-        axis_name: 'X'
-    
-    AxisSlider:
-        id: y_slider
-        axis_name: 'Y'
-    
-    AxisSlider:
-        id: z_slider
-        axis_name: 'Z'
+    GridLayout:
+        cols: 5  # 5 columns for 2 rows of 5 sliders
+        spacing: 10
+        size_hint_y: 1
+        
+        AxisSlider:
+            id: ch1
+            axis_name: 'CH1'
+        
+        AxisSlider:
+            id: ch2
+            axis_name: 'CH2'
+        
+        AxisSlider:
+            id: ch3
+            axis_name: 'CH3'
+        
+        AxisSlider:
+            id: ch4
+            axis_name: 'CH4'
+        
+        AxisSlider:
+            id: ch5
+            axis_name: 'CH5'
+        
+        AxisSlider:
+            id: ch6
+            axis_name: 'CH6'
+        
+        AxisSlider:
+            id: ch7
+            axis_name: 'CH7'
+        
+        AxisSlider:
+            id: ch8
+            axis_name: 'CH8'
+        
+        AxisSlider:
+            id: ch9
+            axis_name: 'CH9'
+        
+        AxisSlider:
+            id: ch10
+            axis_name: 'CH10'

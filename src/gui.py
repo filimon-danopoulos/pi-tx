@@ -11,17 +11,17 @@ class AxisSlider(Widget):
 
 
 class ValueDisplay(BoxLayout):
-    def update_x(self, value):
-        """Update X axis value"""
-        self.ids.x_slider.value = value
+    def update_channel(self, channel: int, value: float):
+        """Update the value for a specific channel
 
-    def update_y(self, value):
-        """Update Y axis value"""
-        self.ids.y_slider.value = value
-
-    def update_z(self, value):
-        """Update Z axis value"""
-        self.ids.z_slider.value = value
+        Args:
+            channel: Channel number (1-10)
+            value: Normalized value (-1 to 1)
+        """
+        if 1 <= channel <= 10:
+            slider_id = f"ch{channel}"
+            if slider_id in self.ids:
+                self.ids[slider_id].value = value
 
 
 class ControllerApp(App):
@@ -31,7 +31,7 @@ class ControllerApp(App):
         self.display = None
 
     def build(self):
-        Window.size = (800, 480)  # Set a small window size
+        Window.size = (800, 480)
         self.display = ValueDisplay()
         return self.display
 
@@ -39,19 +39,30 @@ class ControllerApp(App):
         # Start the input controller
         self.input_controller.start()
 
-        # Register callback for event code 0
-        def value_callback(value):
-            self.display.update_value(value)
+        # Channel mapping: channel_number: (device_path, event_code)
+        channel_mapping = {
+            1: ("/dev/input/event14", 0),  # CH1 - X axis
+            2: ("/dev/input/event14", 1),  # CH2 - Y axis
+            3: ("/dev/input/event14", 5),  # CH3 - Z axis
+            4: ("/dev/input/event14", 6),  # CH4
+            5: ("/dev/input/event14", 288),  # CH5
+            6: ("/dev/input/event15", 0),  # CH1 - X axis
+            7: ("/dev/input/event15", 1),  # CH2 - Y axis
+            8: ("/dev/input/event15", 5),  # CH3 - Z axis
+            9: ("/dev/input/event15", 6),  # CH4
+            10: ("/dev/input/event15", 288),  # CH4
+            # Add more mappings as needed, can use different device paths
+        }
 
-        self.input_controller.register_callback(
-            "/dev/input/event14", 0, lambda v: self.display.update_x(v)
-        )
-        self.input_controller.register_callback(
-            "/dev/input/event14", 1, lambda v: self.display.update_y(v)
-        )
-        self.input_controller.register_callback(
-            "/dev/input/event14", 5, lambda v: self.display.update_z(v)
-        )
+        # Register callbacks for all channels
+        for channel, (device_path, event_code) in channel_mapping.items():
+
+            def make_callback(ch):
+                return lambda value: self.display.update_channel(ch, value)
+
+            self.input_controller.register_callback(
+                device_path, event_code, make_callback(channel)
+            )
 
     def on_stop(self):
         # Stop the input controller
