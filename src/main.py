@@ -5,6 +5,18 @@ import time
 def main():
     # Create and start the input controller
     input_controller = InputController()
+
+    right_stick_path = "/dev/input/event14"
+    input_controller.register_callback(
+        right_stick_path, 0, lambda v: print(f"The X-axis recieved the value {v}")
+    )
+    input_controller.register_callback(
+        right_stick_path, 1, lambda v: print(f"The Y-axis recieved the value {v}")
+    )
+    input_controller.register_callback(
+        right_stick_path, 5, lambda v: print(f"The Z-axis recieved the value {v}")
+    )
+
     input_controller.start()
 
     try:
