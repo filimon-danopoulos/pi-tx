@@ -1,31 +1,19 @@
 from controls import InputController
-import time
+from gui import create_gui
 
 
 def main():
-    # Create and start the input controller
-    input_controller = InputController()
+    # Create the input controller
+    input_controller = InputController(debug=False)
 
-    right_stick_path = "/dev/input/event14"
-    input_controller.register_callback(
-        right_stick_path, 0, lambda v: print(f"The X-axis recieved the value {v}")
-    )
-    input_controller.register_callback(
-        right_stick_path, 1, lambda v: print(f"The Y-axis recieved the value {v}")
-    )
-    input_controller.register_callback(
-        right_stick_path, 5, lambda v: print(f"The Z-axis recieved the value {v}")
-    )
-
-    input_controller.start()
+    # Create and run the GUI
+    app = create_gui(input_controller)
 
     try:
-        # Main program loop
-        while True:
-            # TODO: Add main program logic here
-            time.sleep(0.1)
+        app.run()
     except KeyboardInterrupt:
         print("\nShutting down...")
+    finally:
         input_controller.stop()
         print("Shutdown complete")
 
