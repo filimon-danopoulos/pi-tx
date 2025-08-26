@@ -1,20 +1,27 @@
 from kivy.app import App
 from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.widget import Widget
 from kivy.core.window import Window
+from kivy.properties import NumericProperty, StringProperty
+
+
+class AxisSlider(Widget):
+    value = NumericProperty(0.0)
+    axis_name = StringProperty("")
 
 
 class ValueDisplay(BoxLayout):
     def update_x(self, value):
         """Update X axis value"""
-        self.ids.x_value.text = f"{value:.3f}"
+        self.ids.x_slider.value = value
 
     def update_y(self, value):
         """Update Y axis value"""
-        self.ids.y_value.text = f"{value:.3f}"
+        self.ids.y_slider.value = value
 
     def update_z(self, value):
         """Update Z axis value"""
-        self.ids.z_value.text = f"{value:.3f}"
+        self.ids.z_slider.value = value
 
 
 class ControllerApp(App):

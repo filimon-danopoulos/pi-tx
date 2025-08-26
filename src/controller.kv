@@ -1,36 +1,47 @@
 #:kivy 2.0.0
 
+<AxisSlider>:
+    canvas:
+        # Background rectangle
+        Color:
+            rgba: 0.2, 0.2, 0.2, 1
+        Rectangle:
+            pos: self.x + self.width * 0.25, self.y + 10
+            size: self.width * 0.5, self.height - 20
+            
+        # Center line
+        Color:
+            rgba: 0.4, 0.4, 0.4, 1
+        Rectangle:
+            pos: self.x + self.width * 0.2, self.center_y - 1
+            size: self.width * 0.6, 2
+            
+        # Value bar
+        Color:
+            rgba: 0.2, 0.6, 1.0, 1
+        Rectangle:
+            pos: self.x + self.width * 0.25, self.center_y if self.value >= 0 else self.y + (self.height * (self.value + 1) / 2)
+            size: self.width * 0.5, abs(self.height * self.value / 2)
+    Label:
+        pos: root.pos
+        size: root.size
+        text: root.axis_name + '\n' + format(root.value, '.3f')
+        font_size: '20sp'
+        halign: 'center'
+
 <ValueDisplay>:
     orientation: 'horizontal'
     padding: 20
     spacing: 20
 
-    BoxLayout:
-        orientation: 'vertical'
-        Label:
-            text: 'X'
-            font_size: '20sp'
-        Label:
-            text: '0.000'
-            font_size: '40sp'
-            id: x_value
-
-    BoxLayout:
-        orientation: 'vertical'
-        Label:
-            text: 'Y'
-            font_size: '20sp'
-        Label:
-            text: '0.000'
-            font_size: '40sp'
-            id: y_value
-
-    BoxLayout:
-        orientation: 'vertical'
-        Label:
-            text: 'Z'
-            font_size: '20sp'
-        Label:
-            text: '0.000'
-            font_size: '40sp'
-            id: z_value
+    AxisSlider:
+        id: x_slider
+        axis_name: 'X'
+    
+    AxisSlider:
+        id: y_slider
+        axis_name: 'Y'
+    
+    AxisSlider:
+        id: z_slider
+        axis_name: 'Z'
