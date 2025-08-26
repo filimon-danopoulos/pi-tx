@@ -98,7 +98,6 @@ class InputController:
                                 "max": info.max,
                                 "fuzz": info.fuzz,
                                 "flat": info.flat,
-                                "default": info.value,
                             }
                     self._device_info[d.path] = {"abs_info": abs_info}
 
@@ -123,21 +122,17 @@ class InputController:
             if abs_info:
                 min_val = abs_info["min"]
                 max_val = abs_info["max"]
-                default_val = abs_info["default"]
 
-                if value == default_val:
+                # First normalize to [-1, 1]
+                normalized = (2.0 * (value - min_val) / (max_val - min_val)) - 1.0
+                normalized = max(-1.0, min(1.0, normalized))
+
+                # Apply percentage-based deadzone
+                deadzone = 0.05
+                if abs(normalized) < deadzone:
                     return 0.0
 
-                # Apply deadzone using flat value if available
-                flat = abs_info["flat"]
-                if flat > 0:
-                    if abs(value - (max_val + min_val) // 2) < flat:
-                        return 0.0
-
-                # Normalize to [-1, 1]
-                normalized = (2.0 * (value - min_val) / (max_val - min_val)) - 1.0
-                # Clamp to ensure we're in range
-                return max(-1.0, min(1.0, normalized))
+                return normalized
 
         return 0
 
