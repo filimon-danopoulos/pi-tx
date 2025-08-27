@@ -1,5 +1,6 @@
 import os
 import json
+from functools import partial
 from kivy.app import App
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.widget import Widget
@@ -9,6 +10,7 @@ from kivy.uix.label import Label
 from kivy.core.window import Window
 from kivy.properties import NumericProperty, StringProperty, ObjectProperty
 from state import channel_state
+from setup import setup_controls
 
 MODELS_DIR = "models"
 
@@ -20,52 +22,41 @@ class AxisSlider(Widget):
 
 
 class ModelSelector(BoxLayout):
-    selected_model = ObjectProperty(None)
+    selected_model = StringProperty("")
+    dropdown = ObjectProperty(None)  # Define as property
 
     def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.orientation = "horizontal"
-        self.size_hint_y = None
-        self.height = 50
-        self.padding = 10
-        self.spacing = 10
-
-        # Create the dropdown button
+        # Initialize dropdown before super().__init__
         self.dropdown = DropDown()
-        self.dropdown_button = Button(text="Select Model", size_hint_y=None, height=40)
-        self.dropdown_button.bind(on_release=self.dropdown.open)
+        super().__init__(**kwargs)
 
-        # Add a label
-        self.add_widget(
-            Label(
-                text="Model:", size_hint=(None, None), size=(100, 40), valign="middle"
-            )
-        )
+        # Bind the dropdown selection
+        self.dropdown.bind(on_select=self._on_select)
 
-        # Add the dropdown button
-        self.add_widget(self.dropdown_button)
-
-        # Populate the dropdown
+        # Create initial dropdown items
         self.refresh_models()
+
+    def on_kv_post(self, base_widget):
+        # Bind the dropdown to the button after KV rules are applied
+        if self.ids.model_button:
+            self.ids.model_button.bind(on_release=self.dropdown.open)
 
     def refresh_models(self, *args):
         """Refresh the list of available models"""
         self.dropdown.clear_widgets()
-
-        # Get available models
         models = self.get_available_models()
 
         for model_name in models:
             btn = Button(text=model_name, size_hint_y=None, height=44)
-            btn.bind(on_release=lambda btn: self.select_model(btn.text))
+            btn.bind(on_release=lambda btn: self.dropdown.select(btn.text))
             self.dropdown.add_widget(btn)
 
-    def select_model(self, model_name):
-        """Select a model and load it"""
-        self.dropdown.dismiss()
-        self.dropdown_button.text = model_name
-        self.selected_model = model_name
+    def _on_select(self, instance, model_name):
+        """Called when a model is selected from the dropdown"""
+        if hasattr(self, "ids") and "model_button" in self.ids:
+            self.ids.model_button.text = model_name
         self.load_model(model_name)
+        self.selected_model = model_name
 
     def get_available_models(self):
         """Get list of available models"""
@@ -81,13 +72,27 @@ class ModelSelector(BoxLayout):
             with open(model_path, "r") as f:
                 model_data = json.load(f)
 
+            # Ensure the model has a name
+            model_data["name"] = model_name
+
             # Save as active model
             with open("model_mapping.json", "w") as f:
                 json.dump(model_data, f, indent=2)
 
+            # Reset all channel values in the state
+            for i in range(1, 11):
+                channel_state.update_channel(i, 0.0)
+
             # Notify parent to refresh
-            if hasattr(self.parent, "on_model_changed"):
+            if self.parent and hasattr(self.parent, "on_model_changed"):
                 self.parent.on_model_changed()
+
+            # Trigger the property change properly
+            self.property("selected_model").dispatch(self)
+
+            # Update button text
+            if hasattr(self, "ids") and "model_button" in self.ids:
+                self.ids.model_button.text = model_name
 
         except Exception as e:
             print(f"Error loading model: {e}")
@@ -104,6 +109,31 @@ class ValueDisplay(BoxLayout):
         self.model_selector = ModelSelector()
         self.add_widget(self.model_selector)
 
+        # Create grid for channel sliders
+        from kivy.uix.gridlayout import GridLayout
+
+        self.channel_grid = GridLayout(cols=5, spacing=10, size_hint_y=1)
+        self.add_widget(self.channel_grid)
+
+        # Bind to model changes
+        self.model_selector.bind(selected_model=self.on_model_selected)
+
+        # Load initial model if it exists
+        if os.path.exists("model_mapping.json"):
+            with open("model_mapping.json", "r") as f:
+                try:
+                    model_data = json.load(f)
+                    if "name" in model_data:
+                        model_name = model_data["name"]
+                        self.model_selector.selected_model = model_name
+                        if (
+                            hasattr(self.model_selector, "ids")
+                            and "model_button" in self.model_selector.ids
+                        ):
+                            self.model_selector.ids.model_button.text = model_name
+                except Exception as e:
+                    print(f"Error loading initial model: {e}")
+
         # Create initial sliders
         self.create_channel_sliders()
 
@@ -117,9 +147,8 @@ class ValueDisplay(BoxLayout):
             return
 
         # Clear existing sliders
-        grid = self.ids.channel_grid
-        grid.clear_widgets()
-        self.ids.clear()  # Clear stored references
+        self.channel_grid.clear_widgets()
+        self.slider_refs = {}  # Clear stored references
 
         # Add new sliders
         for channel, config in sorted(mapping["channels"].items()):
@@ -127,19 +156,23 @@ class ValueDisplay(BoxLayout):
             slider.id = f"ch{channel}"
             slider.axis_name = f"CH{channel}"
             slider.control_name = config["control_name"]
-            grid.add_widget(slider)
-            self.ids[slider.id] = slider
+            self.channel_grid.add_widget(slider)
+            self.slider_refs[slider.id] = slider  # Store reference
+
+    def on_model_selected(self, instance, value):
+        """Called when a new model is selected"""
+        self.create_channel_sliders()
 
     def on_model_changed(self, *args):
-        """Called when a new model is selected"""
+        """Called when model content changes"""
         self.create_channel_sliders()
 
     def on_state_change(self, instance, value):
         """Called when channel_values changes in state"""
         for channel, val in value.items():
             slider_id = f"ch{channel}"
-            if slider_id in self.ids:
-                self.ids[slider_id].value = val
+            if slider_id in self.slider_refs:
+                self.slider_refs[slider_id].value = val
 
     def update_channel(self, channel: int, value: float):
         """Update the value for a specific channel
@@ -162,7 +195,18 @@ class ControllerApp(App):
     def build(self):
         Window.size = (800, 480)
         self.display = ValueDisplay()
+
+        # Set up model change handler
+        self.display.model_selector.bind(selected_model=self.on_model_change)
         return self.display
+
+    def on_model_change(self, instance, value):
+        """Handle model changes"""
+        if value:  # Only handle non-empty model names
+            # Clear existing callbacks
+            self.input_controller.clear_callbacks()
+            # Setup new control mappings
+            setup_controls(self.input_controller, self)
 
     def update_value(self, control_id: int, value: float):
         """Update a control value in the display
