@@ -4,11 +4,13 @@ from kivy.uix.widget import Widget
 from kivy.core.window import Window
 from kivy.properties import NumericProperty, StringProperty
 from state import channel_state
+import json
 
 
 class AxisSlider(Widget):
     value = NumericProperty(0.0)
     axis_name = StringProperty("")
+    control_name = StringProperty("")
 
 
 class ValueDisplay(BoxLayout):
@@ -17,6 +19,25 @@ class ValueDisplay(BoxLayout):
         self.state = channel_state
         # Bind to state changes
         self.state.bind(channels=self.on_state_change)
+        self.create_channel_sliders()
+
+    def create_channel_sliders(self):
+        """Create sliders based on the model mapping configuration"""
+        try:
+            with open("model_mapping.json", "r") as f:
+                mapping = json.load(f)
+        except FileNotFoundError:
+            print("No model mapping found!")
+            return
+
+        grid = self.ids.channel_grid
+        for channel, config in sorted(mapping["channels"].items()):
+            slider = AxisSlider()
+            slider.id = f"ch{channel}"
+            slider.axis_name = f"CH{channel}"
+            slider.control_name = config["control_name"]
+            grid.add_widget(slider)
+            self.ids[slider.id] = slider
 
     def on_state_change(self, instance, value):
         """Called when channel_values changes in state"""

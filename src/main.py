@@ -1,37 +1,35 @@
+import json
 from controls import InputController
 from gui import create_gui
 from state import channel_state
 
 
 def setup_controls(input_controller, app):
-    """Setup the control mappings and callbacks
+    """Setup the control mappings and callbacks using model_mapping.json
 
     Args:
         input_controller: The input controller instance
         app: The GUI application instance
     """
-    # Channel mapping: channel_number: (device_path, event_code)
-    control_mapping = {
-        1: ("/dev/input/event14", 0),  # Left stick X
-        2: ("/dev/input/event14", 1),  # Left stick Y
-        3: ("/dev/input/event14", 5),  # Right stick X
-        4: ("/dev/input/event14", 6),  # Right stick Y
-        5: ("/dev/input/event14", 288),  # Left throttle
-        6: ("/dev/input/event15", 0),  # Right throttle
-        7: ("/dev/input/event15", 1),  # Rudder
-        8: ("/dev/input/event15", 5),  # Aux 1
-        9: ("/dev/input/event15", 6),  # Aux 2
-        10: ("/dev/input/event15", 288),  # Aux 3
-    }
+    try:
+        with open("model_mapping.json", "r") as f:
+            model_mapping = json.load(f)
+    except FileNotFoundError:
+        print("Error: model_mapping.json not found!")
+        return
 
-    # Register callbacks for all controls
-    for control_id, (device_path, event_code) in control_mapping.items():
+    # Register callbacks for mapped channels
+    for channel, mapping in model_mapping["channels"].items():
 
-        def make_callback(ctrl_id):
-            return lambda value: app.update_value(ctrl_id, value)
+        def make_callback(channel_id):
+            return lambda value: channel_state.update_channel(int(channel_id), value)
+
+        channel_id = int(channel)
+        device_path = mapping["device_path"]
+        control_code = int(mapping["control_code"])
 
         input_controller.register_callback(
-            device_path, event_code, make_callback(control_id)
+            device_path, control_code, make_callback(channel)
         )
 
     # Start the input controller

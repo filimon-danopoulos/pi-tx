@@ -25,55 +25,17 @@
     Label:
         pos: root.pos
         size: root.size
-        text: root.axis_name + '\n' + format(root.value, '.3f')
-        font_size: '20sp'
+        text: root.axis_name + '\n' + format(root.value, '.3f') + '\n' + root.control_name
+        font_size: '15sp'
         halign: 'center'
 
 <ValueDisplay>:
+    orientation: 'vertical'
     padding: 10
     spacing: 10
 
     GridLayout:
-        cols: 5  # 5 columns for 2 rows of 5 sliders
+        id: channel_grid
+        cols: 5  # 5 columns for channels
         spacing: 10
         size_hint_y: 1
-        
-        AxisSlider:
-            id: ch1
-            axis_name: 'CH1'
-        
-        AxisSlider:
-            id: ch2
-            axis_name: 'CH2'
-        
-        AxisSlider:
-            id: ch3
-            axis_name: 'CH3'
-        
-        AxisSlider:
-            id: ch4
-            axis_name: 'CH4'
-        
-        AxisSlider:
-            id: ch5
-            axis_name: 'CH5'
-        
-        AxisSlider:
-            id: ch6
-            axis_name: 'CH6'
-        
-        AxisSlider:
-            id: ch7
-            axis_name: 'CH7'
-        
-        AxisSlider:
-            id: ch8
-            axis_name: 'CH8'
-        
-        AxisSlider:
-            id: ch9
-            axis_name: 'CH9'
-        
-        AxisSlider:
-            id: ch10
-            axis_name: 'CH10'
