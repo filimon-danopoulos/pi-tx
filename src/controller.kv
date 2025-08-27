@@ -29,11 +29,19 @@
         font_size: '15sp'
         halign: 'center'
 
+<ModelSelector>:
+    canvas.before:
+        Color:
+            rgba: 0.15, 0.15, 0.15, 1
+        Rectangle:
+            pos: self.pos
+            size: self.size
+
 <ValueDisplay>:
     orientation: 'vertical'
     padding: 10
     spacing: 10
-
+    
     GridLayout:
         id: channel_grid
         cols: 5  # 5 columns for channels

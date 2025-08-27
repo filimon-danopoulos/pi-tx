@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 import json
-from typing import Dict, Any, List, Tuple
+import os
+from typing import Dict, Any, List, Tuple, Optional
+
+MODELS_DIR = "models"
 
 
 def load_stick_mapping(filename: str = "stick_mapping.json") -> Dict[str, Any]:
@@ -13,20 +16,30 @@ def load_stick_mapping(filename: str = "stick_mapping.json") -> Dict[str, Any]:
         return {}
 
 
-def load_existing_model(filename: str = "model_mapping.json") -> Dict[str, Any]:
+def get_available_models() -> List[str]:
+    """Get a list of available model configurations."""
+    if not os.path.exists(MODELS_DIR):
+        os.makedirs(MODELS_DIR)
+    return [f[:-5] for f in os.listdir(MODELS_DIR) if f.endswith(".json")]
+
+
+def load_existing_model(model_name: str) -> Dict[str, Any]:
     """Load existing model mapping if it exists."""
     try:
-        with open(filename, "r") as f:
+        with open(os.path.join(MODELS_DIR, f"{model_name}.json"), "r") as f:
             return json.load(f)
     except FileNotFoundError:
-        return {"channels": {}}
+        return {"name": model_name, "channels": {}}
 
 
-def save_model_mapping(
-    mapping: Dict[str, Any], filename: str = "model_mapping.json"
-) -> None:
+def save_model_mapping(mapping: Dict[str, Any], model_name: str) -> None:
     """Save the model mapping to a file."""
-    with open(filename, "w") as f:
+    if not os.path.exists(MODELS_DIR):
+        os.makedirs(MODELS_DIR)
+    with open(os.path.join(MODELS_DIR, f"{model_name}.json"), "w") as f:
+        json.dump(mapping, f, indent=2)
+    # Also save as the active model
+    with open("model_mapping.json", "w") as f:
         json.dump(mapping, f, indent=2)
 
 
@@ -60,11 +73,13 @@ def print_available_controls(stick_mapping: Dict[str, Any]) -> None:
 
 def print_current_model(model_mapping: Dict[str, Any]) -> None:
     """Print the current model mapping."""
+    print(f"\nModel: {model_mapping.get('name', 'Unnamed')}")
+
     if not model_mapping["channels"]:
         print("\nNo channels mapped yet.")
         return
 
-    print("\nCurrent model mapping:")
+    print("\nChannel mapping:")
     print("-" * 70)
     print(f"{'Channel':<10} {'Device':<30} {'Control':<20}")
     print("-" * 70)
@@ -75,13 +90,74 @@ def print_current_model(model_mapping: Dict[str, Any]) -> None:
         print(f"{channel:<10} {device_name[:30]:<30} {control_name:<20}")
 
 
+def select_or_create_model() -> Optional[str]:
+    """Let the user select an existing model or create a new one."""
+    while True:
+        print("\nModel Selection")
+        print("=" * 70)
+
+        # Get available models
+        models = get_available_models()
+        if models:
+            print("\nExisting models:")
+            for i, model in enumerate(models, 1):
+                print(f"{i}. {model}")
+        else:
+            print("\nNo existing models found.")
+
+        print("\nOptions:")
+        print("1. Create new model")
+        if models:
+            print("2. Load existing model")
+        print("0. Exit")
+
+        try:
+            choice = input("\nEnter your choice: ").strip()
+
+            if choice == "0":
+                return None
+            elif choice == "1":
+                while True:
+                    name = input("\nEnter name for new model: ").strip()
+                    if not name:
+                        print("Name cannot be empty!")
+                        continue
+                    if name in models:
+                        print("Model with that name already exists!")
+                        continue
+                    if not name.replace("_", "").isalnum():
+                        print(
+                            "Name can only contain letters, numbers, and underscores!"
+                        )
+                        continue
+                    return name
+            elif choice == "2" and models:
+                while True:
+                    try:
+                        idx = int(input("\nEnter model number: ").strip())
+                        if 1 <= idx <= len(models):
+                            return models[idx - 1]
+                        print("Invalid model number!")
+                    except ValueError:
+                        print("Invalid input! Please enter a number.")
+            else:
+                print("Invalid choice!")
+        except KeyboardInterrupt:
+            return None
+
+
 def create_mapping() -> None:
     """Main function to create a model mapping."""
     stick_mapping = load_stick_mapping()
     if not stick_mapping:
         return
 
-    model_mapping = load_existing_model()
+    model_name = select_or_create_model()
+    if not model_name:
+        print("\nExiting...")
+        return
+
+    model_mapping = load_existing_model(model_name)
 
     while True:
         print("\nModel Mapping Configuration")
@@ -176,8 +252,8 @@ def create_mapping() -> None:
                 continue
 
         elif choice == "4":
-            save_model_mapping(model_mapping)
-            print("\nModel mapping saved successfully!")
+            save_model_mapping(model_mapping, model_name)
+            print(f"\nModel '{model_name}' saved successfully!")
             break
 
         elif choice == "5":
