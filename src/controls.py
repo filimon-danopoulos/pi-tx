@@ -1,17 +1,24 @@
-import threading, time, select
+import threading, time, select, json
 from datetime import datetime
 from evdev import InputDevice, ecodes, list_devices
 
 
 class InputController:
-    def __init__(self, debug=False):
+    def __init__(self, debug=False, mapping_file="stick_mapping.json"):
         self._stop_event = threading.Event()
         self._thread = None
         self._devices = []
         self._callbacks = {}
         self._debug = debug
-        self._device_info = {}
         self._last_values = {}
+
+        # Load control mappings
+        try:
+            with open(mapping_file, "r") as f:
+                self._mappings = json.load(f)
+        except FileNotFoundError:
+            print(f"Warning: Mapping file {mapping_file} not found")
+            self._mappings = {}
 
     def start(self):
         if self._thread and self._thread.is_alive():
@@ -90,19 +97,13 @@ class InputController:
                         print(f"Could not grab {path} ({d.name}): {e}")
                         continue
 
-                    abs_info = {}
-                    if ecodes.EV_ABS in d.capabilities():
-                        for code, info in d.capabilities()[ecodes.EV_ABS]:
-                            abs_info[code] = {
-                                "min": info.min,
-                                "max": info.max,
-                                "fuzz": info.fuzz,
-                                "flat": info.flat,
-                            }
-                    self._device_info[d.path] = {"abs_info": abs_info}
-
-                    found.append(d)
-                    print(f"Added {d.name} at {path}")
+                    # Only add device if we have mappings for it
+                    if d.path in self._mappings:
+                        found.append(d)
+                        print(f"Added {d.name} at {path} (mapped device)")
+                    else:
+                        print(f"Skipping {d.name} at {path} (no mapping)")
+                        d.ungrab()
             except Exception as e:
                 print(f"Failed to open {path}: {e}")
         return found
@@ -111,28 +112,42 @@ class InputController:
         self, device_path: str, event_type: int, event_code: int, value: int
     ) -> float:
         """Normalize input values to range [-1, 1] for axes and [0, 1] for buttons."""
+        # Check if we have a mapping for this device and control
+        device_mapping = self._mappings.get(device_path, {}).get("controls", {})
+        code_str = str(event_code)
+
+        if code_str not in device_mapping:
+            return 0.0  # Ignore unmapped controls
+
+        control = device_mapping[code_str]
+        if control["event_type"] != event_type:
+            return 0.0  # Event type mismatch
+
         if event_type == ecodes.EV_KEY:
             # Button values are 0 or 1
             return float(value)
 
         if event_type == ecodes.EV_ABS:
-            device_info = self._device_info.get(device_path, {})
-            abs_info = device_info.get("abs_info", {}).get(event_code)
+            min_val = control["min"]
+            max_val = control["max"]
+            axis_type = control["type"]
 
-            if abs_info:
-                min_val = abs_info["min"]
-                max_val = abs_info["max"]
-
-                # First normalize to [-1, 1]
+            # Normalize based on axis type
+            if axis_type == "unipolar":
+                # Normalize to [0, 1] for unipolar
+                normalized = (value - min_val) / (max_val - min_val)
+                normalized = max(0.0, min(1.0, normalized))
+            else:
+                # Normalize to [-1, 1] for bipolar
                 normalized = (2.0 * (value - min_val) / (max_val - min_val)) - 1.0
                 normalized = max(-1.0, min(1.0, normalized))
 
-                # Apply percentage-based deadzone
-                deadzone = 0.05
-                if abs(normalized) < deadzone:
-                    return 0.0
+            # Apply percentage-based deadzone
+            deadzone = 0.05
+            if abs(normalized) < deadzone:
+                return 0.0
 
-                return normalized
+            return normalized
 
         return 0
 
