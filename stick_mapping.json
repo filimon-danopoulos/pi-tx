@@ -1,0 +1,141 @@
+{
+  "/dev/input/event14": {
+    "name": "Thrustmaster T.16000M",
+    "controls": {
+      "1": {
+        "event_type": 3,
+        "name": "stick-y",
+        "type": "bipolar",
+        "min": 0,
+        "max": 16383,
+        "fuzz": 63,
+        "flat": 1023
+      },
+      "0": {
+        "event_type": 3,
+        "name": "stick-x",
+        "type": "bipolar",
+        "min": 0,
+        "max": 16383,
+        "fuzz": 63,
+        "flat": 1023
+      },
+      "5": {
+        "event_type": 3,
+        "name": "stick-z",
+        "type": "bipolar",
+        "min": 0,
+        "max": 255,
+        "fuzz": 0,
+        "flat": 15
+      },
+      "17": {
+        "event_type": 3,
+        "name": "hat-y",
+        "type": "bipolar",
+        "min": -1,
+        "max": 1,
+        "fuzz": 0,
+        "flat": 0
+      },
+      "16": {
+        "event_type": 3,
+        "name": "hat-x",
+        "type": "bipolar",
+        "min": -1,
+        "max": 1,
+        "fuzz": 0,
+        "flat": 0
+      },
+      "6": {
+        "event_type": 3,
+        "name": "throttle",
+        "type": "unipolar",
+        "min": 0,
+        "max": 255,
+        "fuzz": 0,
+        "flat": 15
+      },
+      "288": {
+        "event_type": 1,
+        "name": "trigger",
+        "type": "button"
+      },
+      "290": {
+        "event_type": 1,
+        "name": "sb-1",
+        "type": "button"
+      },
+      "289": {
+        "event_type": 1,
+        "name": "sb-2",
+        "type": "button"
+      },
+      "291": {
+        "event_type": 1,
+        "name": "sb-3",
+        "type": "button"
+      },
+      "298": {
+        "event_type": 1,
+        "name": "lb-1",
+        "type": "button"
+      },
+      "299": {
+        "event_type": 1,
+        "name": "lb-2",
+        "type": "button"
+      },
+      "300": {
+        "event_type": 1,
+        "name": "lb-3",
+        "type": "button"
+      },
+      "303": {
+        "event_type": 1,
+        "name": "lb-4",
+        "type": "button"
+      },
+      "302": {
+        "event_type": 1,
+        "name": "lb-5",
+        "type": "button"
+      },
+      "301": {
+        "event_type": 1,
+        "name": "lb-6",
+        "type": "button"
+      },
+      "294": {
+        "event_type": 1,
+        "name": "rb-1",
+        "type": "button"
+      },
+      "293": {
+        "event_type": 1,
+        "name": "rb-2",
+        "type": "button"
+      },
+      "292": {
+        "event_type": 1,
+        "name": "rb-3",
+        "type": "button"
+      },
+      "295": {
+        "event_type": 1,
+        "name": "rb-4",
+        "type": "button"
+      },
+      "296": {
+        "event_type": 1,
+        "name": "rb-5",
+        "type": "button"
+      },
+      "297": {
+        "event_type": 1,
+        "name": "rb-6",
+        "type": "button"
+      }
+    }
+  }
+}
