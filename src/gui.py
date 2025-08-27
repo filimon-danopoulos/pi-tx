@@ -3,6 +3,7 @@ from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.widget import Widget
 from kivy.core.window import Window
 from kivy.properties import NumericProperty, StringProperty
+from state import channel_state
 
 
 class AxisSlider(Widget):
@@ -11,6 +12,19 @@ class AxisSlider(Widget):
 
 
 class ValueDisplay(BoxLayout):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.state = channel_state
+        # Bind to state changes
+        self.state.bind(channels=self.on_state_change)
+
+    def on_state_change(self, instance, value):
+        """Called when channel_values changes in state"""
+        for channel, val in value.items():
+            slider_id = f"ch{channel}"
+            if slider_id in self.ids:
+                self.ids[slider_id].value = val
+
     def update_channel(self, channel: int, value: float):
         """Update the value for a specific channel
 
@@ -19,9 +33,7 @@ class ValueDisplay(BoxLayout):
             value: Normalized value (-1 to 1)
         """
         if 1 <= channel <= 10:
-            slider_id = f"ch{channel}"
-            if slider_id in self.ids:
-                self.ids[slider_id].value = value
+            self.state.update_channel(channel, value)
 
 
 class ControllerApp(App):
@@ -29,44 +41,22 @@ class ControllerApp(App):
         super().__init__(**kwargs)
         self.input_controller = input_controller
         self.display = None
+        self.state = channel_state
 
     def build(self):
         Window.size = (800, 480)
         self.display = ValueDisplay()
         return self.display
 
-    def on_start(self):
-        # Start the input controller
-        self.input_controller.start()
+    def update_value(self, control_id: int, value: float):
+        """Update a control value in the display
 
-        # Channel mapping: channel_number: (device_path, event_code)
-        channel_mapping = {
-            1: ("/dev/input/event14", 0),  # CH1 - X axis
-            2: ("/dev/input/event14", 1),  # CH2 - Y axis
-            3: ("/dev/input/event14", 5),  # CH3 - Z axis
-            4: ("/dev/input/event14", 6),  # CH4
-            5: ("/dev/input/event14", 288),  # CH5
-            6: ("/dev/input/event15", 0),  # CH1 - X axis
-            7: ("/dev/input/event15", 1),  # CH2 - Y axis
-            8: ("/dev/input/event15", 5),  # CH3 - Z axis
-            9: ("/dev/input/event15", 6),  # CH4
-            10: ("/dev/input/event15", 288),  # CH4
-            # Add more mappings as needed, can use different device paths
-        }
-
-        # Register callbacks for all channels
-        for channel, (device_path, event_code) in channel_mapping.items():
-
-            def make_callback(ch):
-                return lambda value: self.display.update_channel(ch, value)
-
-            self.input_controller.register_callback(
-                device_path, event_code, make_callback(channel)
-            )
-
-    def on_stop(self):
-        # Stop the input controller
-        self.input_controller.stop()
+        Args:
+            control_id: The control ID (1-10)
+            value: The normalized value for the control
+        """
+        if self.display:
+            self.display.update_channel(control_id, value)
 
 
 def create_gui(input_controller):
