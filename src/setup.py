@@ -22,7 +22,6 @@ def setup_controls(input_controller, app):
         def make_callback(channel_id):
             return lambda value: channel_state.update_channel(int(channel_id), value)
 
-        channel_id = int(channel)
         device_path = mapping["device_path"]
         control_code = int(mapping["control_code"])
 
