@@ -1,24 +1,26 @@
+from __future__ import annotations
 import threading, time, select, json
 from queue import SimpleQueue
 from datetime import datetime
 from evdev import InputDevice, ecodes, list_devices
+from pathlib import Path
 
 
 class InputController:
-    def __init__(self, debug=False, mapping_file="stick_mapping.json"):
+    def __init__(self, debug=False, mapping_file: str | None = None):
+        if mapping_file is None:
+            mapping_file = str(
+                Path(__file__).parent / "mappings" / "stick_mapping.json"
+            )
         self._stop_event = threading.Event()
         self._thread = None
         self._devices: list[InputDevice] = []
         self._callbacks: dict[str, dict[int, callable]] = {}
         self._debug = debug
         self._last_values: dict[str, dict[int, float]] = {}
-        # Low-latency event queue: (channel_id:int, value:float)
         self._event_queue: SimpleQueue[tuple[int, float]] = SimpleQueue()
-        self._callback_mode = True  # default mode
-        # Direct channel map for queue mode: device_path -> event_code -> channel_id
+        self._callback_mode = True
         self._channel_map: dict[str, dict[int, int]] = {}
-
-        # Load control mappings (stick/axis spec, not per-model channel mapping)
         try:
             with open(mapping_file, "r") as f:
                 self._mappings = json.load(f)
@@ -49,36 +51,22 @@ class InputController:
         return True
 
     def register_callback(self, device_path: str, event_code: int, callback) -> None:
-        """Register a callback for a specific device and event code.
-
-        Args:
-            device_path: The path to the input device (e.g., '/dev/input/event0')
-            event_code: The event code to listen for
-            callback: Function to call when the event occurs. Will be called with (device_path, event)
-        """
         if device_path not in self._callbacks:
             self._callbacks[device_path] = {}
         self._callbacks[device_path][event_code] = callback
 
     def clear_callbacks(self) -> None:
-        """Clear all registered callbacks and last values.
-        This resets the controller to its initial state, removing all callback registrations
-        and forgetting all last known values.
-        """
         self._callbacks.clear()
         self._last_values.clear()
 
-    # ---- Low-latency queue API ----
+    # Queue mode
     def enable_queue_mode(self):
-        """Disable direct callbacks, enabling queue-only event delivery."""
         self._callback_mode = False
 
     def enqueue_channel_value(self, channel_id: int, value: float):
-        """Put a channel value update into the thread-safe queue."""
         self._event_queue.put((channel_id, value))
 
     def pop_events(self, max_batch: int = 128):
-        """Retrieve up to max_batch events from the queue (non-blocking)."""
         events = []
         for _ in range(max_batch):
             try:
@@ -90,32 +78,20 @@ class InputController:
     def register_channel_mapping(
         self, device_path: str, event_code: int, channel_id: int
     ):
-        """Map a device/event to a channel id for queue mode."""
-        if device_path not in self._channel_map:
-            self._channel_map[device_path] = {}
-        self._channel_map[device_path][event_code] = channel_id
+        self._channel_map.setdefault(device_path, {})[event_code] = channel_id
 
     def _is_joystick(self, dev: InputDevice) -> bool:
         caps = dev.capabilities()
         if ecodes.EV_ABS not in caps:
             return False
-
         btns = caps.get(ecodes.EV_KEY, [])
         has_joy_btns = any(code in ecodes.BTN for code in btns)
         if not has_joy_btns:
             return False
-
         name = (dev.name or "").lower()
-        non_joystick_keywords = [
-            "touchpad",
-            "synaptics",
-            "trackpad",
-            "mouse",
-            "keyboard",
-        ]
-        if any(x in name for x in non_joystick_keywords):
-            return False
-
+        for k in ["touchpad", "synaptics", "trackpad", "mouse", "keyboard"]:
+            if k in name:
+                return False
         return True
 
     def _discover(self):
@@ -129,8 +105,6 @@ class InputController:
                     except Exception as e:
                         print(f"Could not grab {path} ({d.name}): {e}")
                         continue
-
-                    # Only add device if we have mappings for it
                     if d.path in self._mappings:
                         found.append(d)
                         print(f"Added {d.name} at {path} (mapped device)")
@@ -144,53 +118,34 @@ class InputController:
     def _normalize_value(
         self, device_path: str, event_type: int, event_code: int, value: int
     ) -> float:
-        """Normalize input values to range [-1, 1] for axes and [0, 1] for buttons."""
-        # Check if we have a mapping for this device and control
         device_mapping = self._mappings.get(device_path, {}).get("controls", {})
         code_str = str(event_code)
-
         if code_str not in device_mapping:
-            return 0.0  # Ignore unmapped controls
-
+            return 0.0
         control = device_mapping[code_str]
         if control["event_type"] != event_type:
-            return 0.0  # Event type mismatch
-
+            return 0.0
         if event_type == ecodes.EV_KEY:
-            # Button values are 0 or 1
             return float(value)
-
         if event_type == ecodes.EV_ABS:
-            min_val = control["min"]
-            max_val = control["max"]
-            axis_type = control["type"]
-
-            # Normalize based on axis type
+            min_val, max_val = control["min"], control["max"]
+            axis_type = control.get("type", "bipolar")
             if axis_type == "unipolar":
-                # Normalize to [0, 1] for unipolar
                 normalized = (value - min_val) / (max_val - min_val)
                 normalized = max(0.0, min(1.0, normalized))
             else:
-                # Normalize to [-1, 1] for bipolar
                 normalized = (2.0 * (value - min_val) / (max_val - min_val)) - 1.0
                 normalized = max(-1.0, min(1.0, normalized))
-
-            # Apply percentage-based deadzone
-            deadzone = 0.05
-            if abs(normalized) < deadzone:
+            if abs(normalized) < 0.05:
                 return 0.0
-
             return normalized
+        return 0.0
 
-        return 0
-
-    # ---- main loop ----
     def _input_loop(self):
         self._devices = self._discover()
         if not self._devices:
             print("Input controller: no joystick-like devices found.")
             return
-
         try:
             while not self._stop_event.is_set():
                 r, _, _ = select.select([d.fd for d in self._devices], [], [], 0.25)
@@ -201,50 +156,33 @@ class InputController:
                     if not dev:
                         continue
                     for ev in dev.read():
-                        if ev.type == ecodes.EV_SYN or ev.type == ecodes.EV_MSC:
+                        if ev.type in (ecodes.EV_SYN, ecodes.EV_MSC):
                             continue
-
-                        # Normalize the value
-                        normalized_value = self._normalize_value(
+                        norm = self._normalize_value(
                             dev.path, ev.type, ev.code, ev.value
                         )
-
-                        # Get last value for this device/event combination
                         if dev.path not in self._last_values:
                             self._last_values[dev.path] = {}
-                        last_value = self._last_values[dev.path].get(ev.code)
-
-                        # Check if value has changed
-                        if last_value != normalized_value:
-                            # Update stored value
-                            self._last_values[dev.path][ev.code] = normalized_value
-
+                        last = self._last_values[dev.path].get(ev.code)
+                        if last != norm:
+                            self._last_values[dev.path][ev.code] = norm
                             if self._callback_mode:
-                                device_callbacks = self._callbacks.get(dev.path, {})
-                                callback = device_callbacks.get(ev.code)
-                                if callback:
+                                cb = self._callbacks.get(dev.path, {}).get(ev.code)
+                                if cb:
                                     try:
-                                        callback(normalized_value)
+                                        cb(norm)
                                     except Exception as e:
                                         print(
-                                            f"Error in callback for {dev.path}, event {ev.code}: {e}"
+                                            f"Error in callback {dev.path} {ev.code}: {e}"
                                         )
                             else:
-                                # Queue mode: look up channel mapping and enqueue
                                 ch_id = self._channel_map.get(dev.path, {}).get(ev.code)
                                 if ch_id is not None:
-                                    self.enqueue_channel_value(ch_id, normalized_value)
-
-                        # Print debug info
+                                    self.enqueue_channel_value(ch_id, norm)
                         if self._debug:
-                            status = (
-                                "changed"
-                                if last_value != normalized_value
-                                else "filtered"
-                            )
+                            status = "changed" if last != norm else "filtered"
                             print(
-                                f"{datetime.now().strftime("%H:%M:%S.%f")[:-3]}  dev={dev.path}  type={ev.type}  code={ev.code}  "
-                                f"raw={ev.value}  normalized={normalized_value:.3f}  {status}"
+                                f"{datetime.now().strftime('%H:%M:%S.%f')[:-3]} dev={dev.path} code={ev.code} raw={ev.value} norm={norm:.3f} {status}"
                             )
         finally:
             print("Input controller stopped")

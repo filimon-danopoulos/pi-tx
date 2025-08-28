@@ -1,30 +1,23 @@
-import os
+from __future__ import annotations
 from typing import Dict
-
 from kivy.clock import Clock
 from kivy.properties import StringProperty, DictProperty
 from kivy.uix.scrollview import ScrollView
-from kivy.uix.boxlayout import BoxLayout  # noqa: F401 (kept for potential kv usage)
-
 from kivymd.app import MDApp
 from kivymd.uix.boxlayout import MDBoxLayout
 from kivymd.uix.label import MDLabel
 from kivymd.uix.menu import MDDropdownMenu
-from kivymd.uix.button import MDFlatButton
-from kivymd.uix.toolbar import MDTopAppBar as MDToolbar  # Using modern KivyMD component
+from kivymd.uix.toolbar import MDTopAppBar as MDToolbar
 from kivymd.uix.list import OneLineListItem
 from kivy.uix.widget import Widget
 from kivy.metrics import dp
 from kivy.graphics import Color, Rectangle
 from kivy.properties import NumericProperty, ListProperty
 
-"""KivyMD GUI application providing model selection and live channel values."""
-
-from model_repo import ModelRepository, Model
-from channel_store import channel_store
-
-MODELS_DIR = "models"
-LAST_MODEL_FILE = ".last_model"
+from ..domain.model_repo import ModelRepository, Model
+from ..domain.channel_store import channel_store
+from ..input.controls import InputController
+from ..config.settings import MODELS_DIR, LAST_MODEL_FILE
 
 
 class ChannelBar(Widget):
@@ -32,8 +25,8 @@ class ChannelBar(Widget):
     channel_type = StringProperty("unipolar")
     bar_color = ListProperty([0, 0.6, 1, 1])
 
-    def __init__(self, channel_type: str, **kwargs):
-        super().__init__(**kwargs)
+    def __init__(self, channel_type: str, **kw):
+        super().__init__(**kw)
         self.channel_type = channel_type or "unipolar"
         self._bg_color = (0.18, 0.18, 0.18, 1)
         self._update_bar_color()
@@ -45,32 +38,25 @@ class ChannelBar(Widget):
 
     def _update_bar_color(self):
         if self.channel_type == "bipolar":
-            self.bar_color = [0.30, 0.80, 0.40, 1]  # green
+            self.bar_color = [0.30, 0.80, 0.40, 1]
         elif self.channel_type == "button":
-            self.bar_color = [0.90, 0.25, 0.25, 1]  # red
+            self.bar_color = [0.90, 0.25, 0.25, 1]
         else:
-            self.bar_color = [0.22, 0.55, 0.95, 1]  # blue
+            self.bar_color = [0.22, 0.55, 0.95, 1]
 
     def _redraw(self):
         self.canvas.clear()
         with self.canvas:
-            # Background
             Color(*self._bg_color)
             Rectangle(pos=self.pos, size=self.size)
-            # Foreground bar
             val = float(self.value)
             if self.channel_type == "bipolar":
-                # value in -1..1, draw from center
                 half_w = self.width / 2.0
                 center_x = self.x + half_w
                 magnitude = max(0.0, min(1.0, abs(val))) * half_w
-                if val >= 0:
-                    bar_x = center_x
-                else:
-                    bar_x = center_x - magnitude
+                bar_x = center_x if val >= 0 else center_x - magnitude
                 bar_w = magnitude
             else:
-                # unipolar/button value assumed 0..1
                 clamped = max(0.0, min(1.0, val))
                 bar_x = self.x
                 bar_w = self.width * clamped
@@ -79,16 +65,14 @@ class ChannelBar(Widget):
 
 
 class ChannelRow(MDBoxLayout):
-    """Row with channel label, colored bar, and numeric value."""
-
-    def __init__(self, channel_number: int, channel_type: str, **kwargs):
+    def __init__(self, channel_number: int, channel_type: str, **kw):
         super().__init__(
             orientation="horizontal",
             size_hint_y=None,
             height=dp(42),
             padding=(dp(8), 0, dp(8), 0),
             spacing=dp(8),
-            **kwargs,
+            **kw,
         )
         self.channel_number = channel_number
         self.channel_type = channel_type or "unipolar"
@@ -111,77 +95,55 @@ class ChannelRow(MDBoxLayout):
 
 
 class PiTxApp(MDApp):
-    """Main KivyMD application handling model selection and channel display."""
-
     selected_model = StringProperty("")
     model_mapping: DictProperty = DictProperty({})
 
-    def __init__(self, input_controller, **kwargs):
-        super().__init__(**kwargs)
+    def __init__(self, input_controller: InputController, **kw):
+        super().__init__(**kw)
         self.input_controller = input_controller
-        self.channel_rows = {}  # type: Dict[int, ChannelRow]
+        self.channel_rows = {}
         self.available_models = []
         self._model_repo = ModelRepository(MODELS_DIR)
-        self._current_model = None  # type: Model | None
-        # Register custom event for external binding (e.g. setup_controls after selection)
+        self._current_model: Model | None = None
         self.register_event_type("on_model_selected")
-        # No binding needed; we directly update rows from queue events.
 
-    # Event stub (can be bound in main_md.py)
-    def on_model_selected(self, model_name: str):  # noqa: D401 - Kivy event
+    def on_model_selected(self, model_name: str):
         pass
 
-    def build(self):  # noqa: D401 - Kivy build method
+    def build(self):
         self.theme_cls.primary_palette = "Blue"
         root = MDBoxLayout(orientation="vertical")
-
-        # Top App Bar
         toolbar = MDToolbar(title="pi-tx")
         toolbar.right_action_items = [
             ["folder", lambda x: self.open_model_menu(x)],
             ["refresh", lambda x: self.refresh_models()],
         ]
         root.add_widget(toolbar)
-
-        # Keep reference for menu anchoring
         self._toolbar = toolbar
-
-        # Container for channels inside a scrollview
         scroll = ScrollView()
         self.channel_container = MDBoxLayout(
-            orientation="vertical",
-            size_hint_y=None,
-            padding=(0, 10, 0, 10),
-            spacing=4,
+            orientation="vertical", size_hint_y=None, padding=(0, 10, 0, 10), spacing=4
         )
         self.channel_container.bind(
             minimum_height=self.channel_container.setter("height")
         )
         scroll.add_widget(self.channel_container)
         root.add_widget(scroll)
-
-        # Initial populate of model list
         Clock.schedule_once(lambda *_: self.refresh_models(), 0)
-        # Schedule queue processing for low-latency updates
         Clock.schedule_interval(self._process_input_events, 0)
         return root
 
-    # ---- Model Handling ----
     def refresh_models(self):
-        self.available_models = self._list_models()
-        # Close existing menu if open
+        self.available_models = self._model_repo.list_models()
         if hasattr(self, "_model_menu") and self._model_menu:
             self._model_menu.dismiss()
-        self._model_menu = None
-        # Attempt auto-load of last model (only once, if none selected yet)
+            self._model_menu = None
         if not self.selected_model:
             self._autoload_last_model()
 
     def open_model_menu(self, caller_widget=None):
-        # Ensure models list is current
         if not getattr(self, "available_models", None):
             self.refresh_models()
-
         items = []
         for model_name in self.available_models:
 
@@ -189,11 +151,7 @@ class PiTxApp(MDApp):
                 self._select_model_and_close(m)
 
             items.append(
-                {
-                    "viewclass": "OneLineListItem",
-                    "text": model_name,
-                    "on_release": _cb,
-                }
+                {"viewclass": "OneLineListItem", "text": model_name, "on_release": _cb}
             )
         if not items:
             items = [
@@ -203,29 +161,24 @@ class PiTxApp(MDApp):
                     "on_release": lambda: None,
                 }
             ]
-
-        # Close existing menu if open
         if hasattr(self, "_model_menu") and self._model_menu:
             self._model_menu.dismiss()
+        from kivymd.uix.menu import MDDropdownMenu
 
         self._model_menu = MDDropdownMenu(
-            caller=caller_widget or self._toolbar,
-            items=items,
-            width_mult=4,
+            caller=caller_widget or self._toolbar, items=items, width_mult=4
         )
         self._model_menu.open()
 
     def _select_model_and_close(self, model_name: str):
-        if self._model_menu:
+        if getattr(self, "_model_menu", None):
             self._model_menu.dismiss()
-        self.select_model(model_name)
+            self.select_model(model_name)
 
     def select_model(self, model_name: str):
-        """Load selected model mapping, apply it (register callbacks) and update UI."""
         model = self._model_repo.load_model(model_name)
         self._current_model = model
         self.selected_model = model.name
-        # Keep raw-style mapping structure for now for minimal downstream change
         self.model_mapping = {
             "name": model.name,
             "channels": {
@@ -237,25 +190,17 @@ class PiTxApp(MDApp):
                 for k, v in model.channels.items()
             },
         }
-        # Update toolbar title to reflect model
         if hasattr(self, "_toolbar") and self._toolbar:
             self._toolbar.title = f"pi-tx: {model_name}"
         self._rebuild_channel_rows()
-        # Apply mapping to input controller
         self._apply_model_mapping()
-        # Signal selection (legacy external binds)
         self.dispatch("on_model_selected", model_name)
-        # Persist last selected model name
         try:
             with open(LAST_MODEL_FILE, "w") as f:
                 f.write(model_name.strip())
         except Exception as e:
             print(f"Warning: couldn't persist last model: {e}")
 
-    def _list_models(self):
-        return self._model_repo.list_models()
-
-    # ---- Channel Display ----
     def _rebuild_channel_rows(self):
         self.channel_container.clear_widgets()
         self.channel_rows.clear()
@@ -275,67 +220,48 @@ class PiTxApp(MDApp):
             self.channel_rows[ch] = row
             self.channel_container.add_widget(row)
 
-    # channel_state change callback removed (direct updating used)
-
-    # ---- Input Controller Callback Wiring ----
     def _apply_model_mapping(self):
-        """Register callbacks for current model mapping directly without file persistence."""
         if not self.input_controller:
             return
-        # Clear previous callbacks and enable queue mode
         self.input_controller.clear_callbacks()
         self.input_controller.enable_queue_mode()
         channels = self.model_mapping.get("channels", {})
-        # Zero rows for channels not present (visual only)
         for ch, row in self.channel_rows.items():
             if str(ch) not in channels:
                 row.update_value(0.0)
-
         for channel, mapping in channels.items():
             try:
                 channel_id = int(channel)
                 device_path = mapping["device_path"]
                 control_code = int(mapping["control_code"])
-
-                # Register mapping for queue mode
                 self.input_controller.register_channel_mapping(
                     device_path, control_code, channel_id
                 )
             except Exception as e:
                 print(f"Failed to register callback for channel {channel}: {e}")
-
-        # Start controller if not already running
         self.input_controller.start()
 
     def _process_input_events(self, *_):
         if not self.input_controller:
             return
+        last: Dict[int, float] = {}
         for ch_id, value in self.input_controller.pop_events():
-            # Update state (if others rely on it) and row directly
+            last[ch_id] = value
+        for ch_id, value in last.items():
             channel_store.set(ch_id, value)
             row = self.channel_rows.get(ch_id)
             if row:
                 row.update_value(value)
 
-    # ---- Last Model Autoload ----
     def _autoload_last_model(self):
         try:
-            if os.path.exists(LAST_MODEL_FILE):
-                with open(LAST_MODEL_FILE, "r") as f:
-                    name = f.read().strip()
-                if name and name in self.available_models:
-                    # Delay selection to allow UI build completion
+            if LAST_MODEL_FILE.exists():
+                name = LAST_MODEL_FILE.read_text().strip()
+                if name and name in self._model_repo.list_models():
                     Clock.schedule_once(lambda *_: self.select_model(name), 0)
         except Exception as e:
             print(f"Warning: failed to autoload last model: {e}")
 
 
-def create_gui(input_controller):
-    """Factory to create the PiTxApp instance.
-
-    Args:
-        input_controller: instance of InputController
-    Returns:
-        PiTxApp instance (not yet running)
-    """
+def create_gui(input_controller: InputController):
     return PiTxApp(input_controller=input_controller)

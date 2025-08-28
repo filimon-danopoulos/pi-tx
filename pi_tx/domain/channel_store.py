@@ -5,14 +5,8 @@ import threading
 
 
 class ChannelStore:
-    """Lightweight channel value container with change listener support.
-
-    Replaces DictProperty-based global state for lower overhead and clearer interface.
-    Thread-safe updates are coalesced onto the main thread.
-    """
-
     def __init__(self, size: int = 16):
-        self._values = [0.0] * (size + 1)  # 1-based indexing convenience
+        self._values = [0.0] * (size + 1)
         self._listeners: Dict[int, list[Callable[[int, float], None]]] = {}
         self._main_thread_id = threading.get_ident()
         self._pending: Dict[int, float] = {}
@@ -67,5 +61,4 @@ class ChannelStore:
         return (i for i in range(1, len(self._values)))
 
 
-# singleton instance
 channel_store = ChannelStore(size=32)
