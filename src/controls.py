@@ -1,4 +1,5 @@
 import threading, time, select, json
+from queue import SimpleQueue
 from datetime import datetime
 from evdev import InputDevice, ecodes, list_devices
 
@@ -7,12 +8,17 @@ class InputController:
     def __init__(self, debug=False, mapping_file="stick_mapping.json"):
         self._stop_event = threading.Event()
         self._thread = None
-        self._devices = []
-        self._callbacks = {}
+        self._devices: list[InputDevice] = []
+        self._callbacks: dict[str, dict[int, callable]] = {}
         self._debug = debug
-        self._last_values = {}
+        self._last_values: dict[str, dict[int, float]] = {}
+        # Low-latency event queue: (channel_id:int, value:float)
+        self._event_queue: SimpleQueue[tuple[int, float]] = SimpleQueue()
+        self._callback_mode = True  # default mode
+        # Direct channel map for queue mode: device_path -> event_code -> channel_id
+        self._channel_map: dict[str, dict[int, int]] = {}
 
-        # Load control mappings
+        # Load control mappings (stick/axis spec, not per-model channel mapping)
         try:
             with open(mapping_file, "r") as f:
                 self._mappings = json.load(f)
@@ -61,6 +67,33 @@ class InputController:
         """
         self._callbacks.clear()
         self._last_values.clear()
+
+    # ---- Low-latency queue API ----
+    def enable_queue_mode(self):
+        """Disable direct callbacks, enabling queue-only event delivery."""
+        self._callback_mode = False
+
+    def enqueue_channel_value(self, channel_id: int, value: float):
+        """Put a channel value update into the thread-safe queue."""
+        self._event_queue.put((channel_id, value))
+
+    def pop_events(self, max_batch: int = 128):
+        """Retrieve up to max_batch events from the queue (non-blocking)."""
+        events = []
+        for _ in range(max_batch):
+            try:
+                events.append(self._event_queue.get_nowait())
+            except Exception:
+                break
+        return events
+
+    def register_channel_mapping(
+        self, device_path: str, event_code: int, channel_id: int
+    ):
+        """Map a device/event to a channel id for queue mode."""
+        if device_path not in self._channel_map:
+            self._channel_map[device_path] = {}
+        self._channel_map[device_path][event_code] = channel_id
 
     def _is_joystick(self, dev: InputDevice) -> bool:
         caps = dev.capabilities()
@@ -186,16 +219,21 @@ class InputController:
                             # Update stored value
                             self._last_values[dev.path][ev.code] = normalized_value
 
-                            # Call registered callbacks for this device and event
-                            device_callbacks = self._callbacks.get(dev.path, {})
-                            callback = device_callbacks.get(ev.code)
-                            if callback:
-                                try:
-                                    callback(normalized_value)
-                                except Exception as e:
-                                    print(
-                                        f"Error in callback for {dev.path}, event {ev.code}: {e}"
-                                    )
+                            if self._callback_mode:
+                                device_callbacks = self._callbacks.get(dev.path, {})
+                                callback = device_callbacks.get(ev.code)
+                                if callback:
+                                    try:
+                                        callback(normalized_value)
+                                    except Exception as e:
+                                        print(
+                                            f"Error in callback for {dev.path}, event {ev.code}: {e}"
+                                        )
+                            else:
+                                # Queue mode: look up channel mapping and enqueue
+                                ch_id = self._channel_map.get(dev.path, {}).get(ev.code)
+                                if ch_id is not None:
+                                    self.enqueue_channel_value(ch_id, normalized_value)
 
                         # Print debug info
                         if self._debug:

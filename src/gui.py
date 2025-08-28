@@ -14,6 +14,10 @@ from kivymd.uix.menu import MDDropdownMenu
 from kivymd.uix.button import MDFlatButton
 from kivymd.uix.toolbar import MDTopAppBar as MDToolbar  # Using modern KivyMD component
 from kivymd.uix.list import OneLineListItem
+from kivy.uix.widget import Widget
+from kivy.metrics import dp
+from kivy.graphics import Color, Rectangle
+from kivy.properties import NumericProperty, ListProperty
 
 """KivyMD GUI application providing model selection and live channel values."""
 
@@ -23,27 +27,87 @@ MODELS_DIR = "models"
 LAST_MODEL_FILE = ".last_model"
 
 
-class ChannelRow(MDBoxLayout):
-    """Simple two-column row for a channel label and its current value."""
+class ChannelBar(Widget):
+    value = NumericProperty(0.0)
+    channel_type = StringProperty("unipolar")
+    bar_color = ListProperty([0, 0.6, 1, 1])
 
-    def __init__(self, channel_number: int, **kwargs):
+    def __init__(self, channel_type: str, **kwargs):
+        super().__init__(**kwargs)
+        self.channel_type = channel_type or "unipolar"
+        self._bg_color = (0.18, 0.18, 0.18, 1)
+        self._update_bar_color()
+        self.bind(
+            pos=lambda *_: self._redraw(),
+            size=lambda *_: self._redraw(),
+            value=lambda *_: self._redraw(),
+        )
+
+    def _update_bar_color(self):
+        if self.channel_type == "bipolar":
+            self.bar_color = [0.30, 0.80, 0.40, 1]  # green
+        elif self.channel_type == "button":
+            self.bar_color = [0.90, 0.25, 0.25, 1]  # red
+        else:
+            self.bar_color = [0.22, 0.55, 0.95, 1]  # blue
+
+    def _redraw(self):
+        self.canvas.clear()
+        with self.canvas:
+            # Background
+            Color(*self._bg_color)
+            Rectangle(pos=self.pos, size=self.size)
+            # Foreground bar
+            val = float(self.value)
+            if self.channel_type == "bipolar":
+                # value in -1..1, draw from center
+                half_w = self.width / 2.0
+                center_x = self.x + half_w
+                magnitude = max(0.0, min(1.0, abs(val))) * half_w
+                if val >= 0:
+                    bar_x = center_x
+                else:
+                    bar_x = center_x - magnitude
+                bar_w = magnitude
+            else:
+                # unipolar/button value assumed 0..1
+                clamped = max(0.0, min(1.0, val))
+                bar_x = self.x
+                bar_w = self.width * clamped
+            Color(*self.bar_color)
+            Rectangle(pos=(bar_x, self.y), size=(bar_w, self.height))
+
+
+class ChannelRow(MDBoxLayout):
+    """Row with channel label, colored bar, and numeric value."""
+
+    def __init__(self, channel_number: int, channel_type: str, **kwargs):
         super().__init__(
             orientation="horizontal",
             size_hint_y=None,
-            height="40dp",
-            padding=(10, 0, 10, 0),
+            height=dp(42),
+            padding=(dp(8), 0, dp(8), 0),
+            spacing=dp(8),
             **kwargs,
         )
         self.channel_number = channel_number
+        self.channel_type = channel_type or "unipolar"
         self.label = MDLabel(
-            text=f"CH_{channel_number}", halign="left", size_hint_x=0.4
+            text=f"CH_{channel_number}", size_hint_x=None, width=dp(60)
         )
-        self.value_label = MDLabel(text="0.00", halign="right")
+        self.bar = ChannelBar(self.channel_type, size_hint_x=1)
+        self.value_label = MDLabel(
+            text="0.00", size_hint_x=None, width=dp(60), halign="right"
+        )
         self.add_widget(self.label)
+        self.add_widget(self.bar)
         self.add_widget(self.value_label)
 
     def update_value(self, value: float):
-        self.value_label.text = f"{value:.2f}"
+        self.bar.value = value
+        self.value_label.text = (
+            f"{value:+.2f}" if self.channel_type == "bipolar" else f"{value:.2f}"
+        )
 
 
 class PiTxApp(MDApp):
@@ -96,6 +160,8 @@ class PiTxApp(MDApp):
 
         # Initial populate of model list
         Clock.schedule_once(lambda *_: self.refresh_models(), 0)
+        # Schedule queue processing for low-latency updates
+        Clock.schedule_interval(self._process_input_events, 0)
         return root
 
     # ---- Model Handling ----
@@ -195,7 +261,10 @@ class PiTxApp(MDApp):
             return
         for ch_str in sorted(channels.keys(), key=lambda x: int(x)):
             ch = int(ch_str)
-            row = ChannelRow(ch)
+            ch_type = channels[ch_str].get(
+                "control_type", channels[ch_str].get("type", "unipolar")
+            )
+            row = ChannelRow(ch, ch_type)
             row.update_value(channel_state.get_channel(ch))
             self.channel_rows[ch] = row
             self.channel_container.add_widget(row)
@@ -210,8 +279,9 @@ class PiTxApp(MDApp):
         """Register callbacks for current model mapping directly without file persistence."""
         if not self.input_controller:
             return
-        # Clear previous callbacks
+        # Clear previous callbacks and enable queue mode
         self.input_controller.clear_callbacks()
+        self.input_controller.enable_queue_mode()
         channels = self.model_mapping.get("channels", {})
         # Zero channels not in mapping to avoid stale values
         for ch in list(channel_state.channels.keys()):
@@ -224,17 +294,25 @@ class PiTxApp(MDApp):
                 device_path = mapping["device_path"]
                 control_code = int(mapping["control_code"])
 
-                def make_cb(ch_id):
-                    return lambda value: channel_state.update_channel(ch_id, value)
-
-                self.input_controller.register_callback(
-                    device_path, control_code, make_cb(channel_id)
+                # Register mapping for queue mode
+                self.input_controller.register_channel_mapping(
+                    device_path, control_code, channel_id
                 )
             except Exception as e:
                 print(f"Failed to register callback for channel {channel}: {e}")
 
         # Start controller if not already running
         self.input_controller.start()
+
+    def _process_input_events(self, *_):
+        if not self.input_controller:
+            return
+        for ch_id, value in self.input_controller.pop_events():
+            # Update state (if others rely on it) and row directly
+            channel_state.update_channel(ch_id, value)
+            row = self.channel_rows.get(ch_id)
+            if row:
+                row.update_value(value)
 
     # ---- Last Model Autoload ----
     def _autoload_last_model(self):
