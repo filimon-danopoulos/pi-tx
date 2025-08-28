@@ -1,5 +1,4 @@
 import os
-import json
 from typing import Dict
 
 from kivy.clock import Clock
@@ -21,7 +20,8 @@ from kivy.properties import NumericProperty, ListProperty
 
 """KivyMD GUI application providing model selection and live channel values."""
 
-from state import channel_state
+from model_repo import ModelRepository, Model
+from channel_store import channel_store
 
 MODELS_DIR = "models"
 LAST_MODEL_FILE = ".last_model"
@@ -119,11 +119,13 @@ class PiTxApp(MDApp):
     def __init__(self, input_controller, **kwargs):
         super().__init__(**kwargs)
         self.input_controller = input_controller
-        self.channel_rows: Dict[int, ChannelRow] = {}
+        self.channel_rows = {}  # type: Dict[int, ChannelRow]
         self.available_models = []
+        self._model_repo = ModelRepository(MODELS_DIR)
+        self._current_model = None  # type: Model | None
         # Register custom event for external binding (e.g. setup_controls after selection)
         self.register_event_type("on_model_selected")
-        channel_state.bind(channels=self._on_channel_state_change)
+        # No binding needed; we directly update rows from queue events.
 
     # Event stub (can be bound in main_md.py)
     def on_model_selected(self, model_name: str):  # noqa: D401 - Kivy event
@@ -220,15 +222,21 @@ class PiTxApp(MDApp):
 
     def select_model(self, model_name: str):
         """Load selected model mapping, apply it (register callbacks) and update UI."""
-        path = os.path.join(MODELS_DIR, f"{model_name}.json")
-        try:
-            with open(path, "r") as f:
-                mapping = json.load(f)
-        except FileNotFoundError:
-            mapping = {"name": model_name, "channels": {}}
-
-        self.selected_model = model_name
-        self.model_mapping = mapping
+        model = self._model_repo.load_model(model_name)
+        self._current_model = model
+        self.selected_model = model.name
+        # Keep raw-style mapping structure for now for minimal downstream change
+        self.model_mapping = {
+            "name": model.name,
+            "channels": {
+                str(k): {
+                    "device_path": v.device_path,
+                    "control_code": v.control_code,
+                    "control_type": v.control_type,
+                }
+                for k, v in model.channels.items()
+            },
+        }
         # Update toolbar title to reflect model
         if hasattr(self, "_toolbar") and self._toolbar:
             self._toolbar.title = f"pi-tx: {model_name}"
@@ -245,9 +253,7 @@ class PiTxApp(MDApp):
             print(f"Warning: couldn't persist last model: {e}")
 
     def _list_models(self):
-        if not os.path.exists(MODELS_DIR):
-            return []
-        return sorted([f[:-5] for f in os.listdir(MODELS_DIR) if f.endswith(".json")])
+        return self._model_repo.list_models()
 
     # ---- Channel Display ----
     def _rebuild_channel_rows(self):
@@ -265,14 +271,11 @@ class PiTxApp(MDApp):
                 "control_type", channels[ch_str].get("type", "unipolar")
             )
             row = ChannelRow(ch, ch_type)
-            row.update_value(channel_state.get_channel(ch))
+            row.update_value(channel_store.get(ch))
             self.channel_rows[ch] = row
             self.channel_container.add_widget(row)
 
-    def _on_channel_state_change(self, *_):
-        # Update only rows we display
-        for ch, row in self.channel_rows.items():
-            row.update_value(channel_state.get_channel(ch))
+    # channel_state change callback removed (direct updating used)
 
     # ---- Input Controller Callback Wiring ----
     def _apply_model_mapping(self):
@@ -283,10 +286,10 @@ class PiTxApp(MDApp):
         self.input_controller.clear_callbacks()
         self.input_controller.enable_queue_mode()
         channels = self.model_mapping.get("channels", {})
-        # Zero channels not in mapping to avoid stale values
-        for ch in list(channel_state.channels.keys()):
+        # Zero rows for channels not present (visual only)
+        for ch, row in self.channel_rows.items():
             if str(ch) not in channels:
-                channel_state.update_channel(ch, 0.0)
+                row.update_value(0.0)
 
         for channel, mapping in channels.items():
             try:
@@ -309,7 +312,7 @@ class PiTxApp(MDApp):
             return
         for ch_id, value in self.input_controller.pop_events():
             # Update state (if others rely on it) and row directly
-            channel_state.update_channel(ch_id, value)
+            channel_store.set(ch_id, value)
             row = self.channel_rows.get(ch_id)
             if row:
                 row.update_value(value)
