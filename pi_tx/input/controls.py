@@ -1,5 +1,5 @@
 from __future__ import annotations
-import threading, time, select, json
+import threading, time, select, json, os
 from queue import SimpleQueue
 from datetime import datetime
 from evdev import InputDevice, ecodes, list_devices
@@ -27,6 +27,24 @@ class InputController:
         except FileNotFoundError:
             print(f"Warning: Mapping file {mapping_file} not found")
             self._mappings = {}
+        # Keep original device path keys (likely by-path / by-id symlinks) prior to alias expansion
+        self._mapping_device_keys: list[str] = [
+            k for k in self._mappings.keys() if k.startswith("/dev/input/")
+        ]
+        # Also index mappings by the real (eventX) device path so runtime dev.path matches regardless of key type
+        added = 0
+        for k in list(self._mapping_device_keys):
+            try:
+                real = os.path.realpath(k)
+            except Exception:
+                continue
+            if real and real != k and real not in self._mappings:
+                self._mappings[real] = self._mappings[k]
+                added += 1
+        if added and self._debug:
+            print(
+                f"InputController: added {added} realpath alias mapping(s) for joystick devices"
+            )
 
     def start(self):
         if self._thread and self._thread.is_alive():
@@ -78,41 +96,50 @@ class InputController:
     def register_channel_mapping(
         self, device_path: str, event_code: int, channel_id: int
     ):
-        self._channel_map.setdefault(device_path, {})[event_code] = channel_id
+        # Normalize symlink (by-path/by-id) to its real event device so runtime dev.path matches
+        real_path = None
+        try:
+            if device_path.startswith("/dev/input/"):
+                import os
 
-    def _is_joystick(self, dev: InputDevice) -> bool:
-        caps = dev.capabilities()
-        if ecodes.EV_ABS not in caps:
-            return False
-        btns = caps.get(ecodes.EV_KEY, [])
-        has_joy_btns = any(code in ecodes.BTN for code in btns)
-        if not has_joy_btns:
-            return False
-        name = (dev.name or "").lower()
-        for k in ["touchpad", "synaptics", "trackpad", "mouse", "keyboard"]:
-            if k in name:
-                return False
-        return True
+                real_path = os.path.realpath(device_path)
+        except Exception:
+            pass
+        target_path = real_path or device_path
+        if real_path and real_path != device_path:
+            # optional: keep original key too, but main lookup uses real_path
+            self._channel_map.setdefault(device_path, {})[event_code] = channel_id
+        self._channel_map.setdefault(target_path, {})[event_code] = channel_id
+        if self._debug:
+            print(
+                f"Registered channel {channel_id} code={event_code} for {device_path} (using {target_path})"
+            )
 
     def _discover(self):
-        found = []
-        for path in list_devices():
+        if not self._mapping_device_keys:
+            print("Input controller: no mapping device paths configured.")
+            return []
+        found: list[InputDevice] = []
+        seen_real: set[str] = set()
+        for configured in self._mapping_device_keys:
             try:
-                d = InputDevice(path)
-                if self._is_joystick(d):
-                    try:
-                        d.grab()
-                    except Exception as e:
-                        print(f"Could not grab {path} ({d.name}): {e}")
-                        continue
-                    if d.path in self._mappings:
-                        found.append(d)
-                        print(f"Added {d.name} at {path} (mapped device)")
-                    else:
-                        print(f"Skipping {d.name} at {path} (no mapping)")
-                        d.ungrab()
+                real = os.path.realpath(configured)
+                if real in seen_real:
+                    continue
+                dev = InputDevice(real)
+                try:
+                    dev.grab()
+                except Exception as e:
+                    if self._debug:
+                        print(f"Non-exclusive access to {configured} -> {real}: {e}")
+                found.append(dev)
+                seen_real.add(real)
+                if self._debug:
+                    print(
+                        f"Opened mapped device {dev.name} via {configured} (real {real})"
+                    )
             except Exception as e:
-                print(f"Failed to open {path}: {e}")
+                print(f"Mapping path {configured} unavailable: {e}")
         return found
 
     def _normalize_value(
@@ -144,7 +171,7 @@ class InputController:
     def _input_loop(self):
         self._devices = self._discover()
         if not self._devices:
-            print("Input controller: no joystick-like devices found.")
+            print("Input controller: no mapped input devices found.")
             return
         try:
             while not self._stop_event.is_set():

@@ -1,5 +1,5 @@
 {
-  "/dev/input/event14": {
+  "/dev/input/by-path/pci-0000:00:14.0-usb-0:3:1.0-event-joystick": {
     "name": "Thrustmaster T.16000M",
     "controls": {
       "1": {
@@ -138,7 +138,7 @@
       }
     }
   },
-  "/dev/input/event15": {
+  "/dev/input/by-path/pci-0000:00:14.0-usb-0:2:1.0-event-joystick": {
     "name": "Thrustmaster T.16000M",
     "controls": {
       "1": {
