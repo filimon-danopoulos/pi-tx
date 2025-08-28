@@ -20,6 +20,7 @@ from kivymd.uix.list import OneLineListItem
 from state import channel_state
 
 MODELS_DIR = "models"
+LAST_MODEL_FILE = ".last_model"
 
 
 class ChannelRow(MDBoxLayout):
@@ -104,6 +105,9 @@ class PiTxApp(MDApp):
         if hasattr(self, "_model_menu") and self._model_menu:
             self._model_menu.dismiss()
         self._model_menu = None
+        # Attempt auto-load of last model (only once, if none selected yet)
+        if not self.selected_model:
+            self._autoload_last_model()
 
     def open_model_menu(self, caller_widget=None):
         # Ensure models list is current
@@ -167,6 +171,12 @@ class PiTxApp(MDApp):
         self._apply_model_mapping()
         # Signal selection (legacy external binds)
         self.dispatch("on_model_selected", model_name)
+        # Persist last selected model name
+        try:
+            with open(LAST_MODEL_FILE, "w") as f:
+                f.write(model_name.strip())
+        except Exception as e:
+            print(f"Warning: couldn't persist last model: {e}")
 
     def _list_models(self):
         if not os.path.exists(MODELS_DIR):
@@ -225,6 +235,18 @@ class PiTxApp(MDApp):
 
         # Start controller if not already running
         self.input_controller.start()
+
+    # ---- Last Model Autoload ----
+    def _autoload_last_model(self):
+        try:
+            if os.path.exists(LAST_MODEL_FILE):
+                with open(LAST_MODEL_FILE, "r") as f:
+                    name = f.read().strip()
+                if name and name in self.available_models:
+                    # Delay selection to allow UI build completion
+                    Clock.schedule_once(lambda *_: self.select_model(name), 0)
+        except Exception as e:
+            print(f"Warning: failed to autoload last model: {e}")
 
 
 def create_gui(input_controller):
