@@ -1,0 +1,13 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "pi-tx (F5)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "pi_tx",
+      "console": "integratedTerminal",
+      "justMyCode": true
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Run pi-tx",
+      "type": "shell",
+      "command": "python",
+      "args": ["-m", "pi_tx"],
+      "group": "build",
+      "problemMatcher": []
+    }
+  ]
+}
