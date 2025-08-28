@@ -61,14 +61,15 @@ def print_available_controls(stick_mapping: Dict[str, Any]) -> None:
     print("\nAvailable controls by device:")
 
     for i, (device_path, device_info) in enumerate(stick_mapping.items(), 1):
-        print(f"\nDevice {i}: {device_info['name']} ({device_path})")
+        print(f"\nDevice {i}: {device_info['name']}")
+        print(f"Path: {device_path}")
         print("-" * 70)
-        print(f"{'#':<4} {'Control':<20} {'Type':<10}")
+        print(f"{'#':<4} {'Control':<25} {'Type':<10} {'Code':<10}")
         print("-" * 70)
 
         for j, (code, control) in enumerate(device_info["controls"].items(), 1):
             control_type = "Button" if control["event_type"] == 1 else control["type"]
-            print(f"{j:<4} {control['name']:<20} {control_type:<10}")
+            print(f"{j:<4} {control['name']:<25} {control_type:<10} {code:<10}")
 
 
 def print_current_model(model_mapping: Dict[str, Any]) -> None:
@@ -80,14 +81,17 @@ def print_current_model(model_mapping: Dict[str, Any]) -> None:
         return
 
     print("\nChannel mapping:")
-    print("-" * 70)
-    print(f"{'Channel':<10} {'Device':<30} {'Control':<20}")
-    print("-" * 70)
+    print("-" * 100)
+    print(f"{'Channel':<10} {'Device':<30} {'Path':<30} {'Control':<20}")
+    print("-" * 100)
 
     for channel, mapping in sorted(model_mapping["channels"].items()):
         device_name = mapping.get("device_name", "Unknown")
+        device_path = mapping.get("device_path", "Unknown")
         control_name = mapping.get("control_name", "Unknown")
-        print(f"{channel:<10} {device_name[:30]:<30} {control_name:<20}")
+        print(
+            f"{channel:<10} {device_name[:30]:<30} {device_path[:30]:<30} {control_name:<20}"
+        )
 
 
 def select_or_create_model() -> Optional[str]:
@@ -189,8 +193,9 @@ def create_mapping() -> None:
                 # Get device list and show selection
                 devices = get_device_list(stick_mapping)
                 print("\nSelect device:")
-                for i, (_, name) in enumerate(devices, 1):
+                for i, (path, name) in enumerate(devices, 1):
                     print(f"{i}. {name}")
+                    print(f"   Path: {path}")
 
                 try:
                     device_choice = int(input("\nEnter device number: ").strip())

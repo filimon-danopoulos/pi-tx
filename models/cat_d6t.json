@@ -14,6 +14,41 @@
       "control_code": "0",
       "control_name": "stick-x",
       "control_type": "bipolar"
+    },
+    "3": {
+      "device_path": "/dev/input/event15",
+      "device_name": "Thrustmaster T.16000M",
+      "control_code": "1",
+      "control_name": "stick-y",
+      "control_type": "bipolar"
+    },
+    "4": {
+      "device_path": "/dev/input/event15",
+      "device_name": "Thrustmaster T.16000M",
+      "control_code": "0",
+      "control_name": "stick-x",
+      "control_type": "bipolar"
+    },
+    "5": {
+      "device_path": "/dev/input/event14",
+      "device_name": "Thrustmaster T.16000M",
+      "control_code": "17",
+      "control_name": "hat-y",
+      "control_type": "bipolar"
+    },
+    "6": {
+      "device_path": "/dev/input/event14",
+      "device_name": "Thrustmaster T.16000M",
+      "control_code": "289",
+      "control_name": "sb-2",
+      "control_type": "button"
+    },
+    "7": {
+      "device_path": "/dev/input/event15",
+      "device_name": "Thrustmaster T.16000M",
+      "control_code": "6",
+      "control_name": "throttle",
+      "control_type": "unipolar"
     }
   }
 }
