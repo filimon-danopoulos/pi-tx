@@ -12,17 +12,18 @@ class ChannelStore:
     def __init__(self, size: int = 10):
         self._raw: List[float] = [0.0] * size
         self._derived: List[float] = [0.0] * size
-        # Reverse flags now booleans (True means apply channel-type dependent inversion)
         self._reverse_flags: List[bool] = [False] * size
-        # Channel types: 'bipolar', 'unipolar', 'button', etc. Used for reversal logic
         self._channel_types: List[str] = ["unipolar"] * size
         self._endpoint_ranges: List[tuple[float, float]] = [(-1.0, 1.0)] * size
+        # Differential mixes: list of (left_idx, right_idx) channel pairs
+        self._differential_mixes: List[tuple[int, int]] = []
         self._build_pipeline()
 
     def _build_pipeline(self):
         self._processors: List[Callable] = [
             self._identity_proc,
             self._reverse_proc,
+            self._differential_mix_proc,
             self._endpoint_proc,
         ]
         self._recompute()
@@ -50,6 +51,26 @@ class ChannelStore:
             for i in range(len(values))
         ]
 
+    # Differential mix processor (tank steering style)
+    def _differential_mix_proc(self, values: List[float]) -> List[float]:
+        if not self._differential_mixes:
+            return values
+        out = values[:]
+        size = len(out)
+        for left_i, right_i in self._differential_mixes:
+            if not (0 <= left_i < size and 0 <= right_i < size):
+                continue
+            orig_left = out[left_i]
+            orig_right = out[right_i]
+            left_val = orig_left + orig_right
+            right_val = orig_right - orig_left
+            scale = max(1.0, abs(left_val), abs(right_val))
+            left_val /= scale
+            right_val /= scale
+            out[left_i] = left_val
+            out[right_i] = right_val
+        return out
+
     def configure_processors(self, processors_cfg: Dict[str, Any] | None):
         if not processors_cfg:
             return
@@ -67,6 +88,33 @@ class ChannelStore:
                         )
             except Exception as e:
                 print(f"ChannelStore: bad reverse entry {key}: {e}")
+        # Differential mixes (list of objects with left/right 1-based ids)
+        diff_cfg = processors_cfg.get("differential")
+        if isinstance(diff_cfg, list):
+            parsed: List[tuple[int, int]] = []
+            for m in diff_cfg:
+                if not isinstance(m, dict):
+                    continue
+                try:
+                    left = int(m.get("left")) - 1
+                    right = int(m.get("right")) - 1
+                    parsed.append((left, right))
+                except Exception:
+                    continue
+            self._differential_mixes = parsed
+        self._build_pipeline()
+
+    def configure_differential_mixes(self, mixes: List[Dict[str, int]]):
+        """Configure differential mixes using only left/right channel ids (1-based)."""
+        parsed: List[tuple[int, int]] = []
+        for m in mixes:
+            try:
+                left = int(m.get("left")) - 1
+                right = int(m.get("right")) - 1
+                parsed.append((left, right))
+            except Exception:
+                continue
+        self._differential_mixes = parsed
         self._build_pipeline()
 
     def configure_channel_types(self, channel_types: Dict[int, str]):
