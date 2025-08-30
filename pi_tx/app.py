@@ -25,6 +25,23 @@ def run():
         sender.start()
         global UART_SENDER
         UART_SENDER = sender
+
+        # Register a shutdown hook so the sender is stopped and serial closed
+        def _shutdown(*_):
+            try:
+                sender.stop()
+            except Exception:
+                pass
+            try:
+                sender.tx.close()
+            except Exception:
+                pass
+
+        try:
+            app.bind(on_stop=_shutdown)
+        except Exception:
+            # If binding fails for any reason, attempt to ensure cleanup at exit
+            pass
     except Exception as e:
         print(f"UART init failed: {e}")
     app.run()
