@@ -16,7 +16,11 @@ def run():
         from .infrastructure.uart_tx import MultiSerialTX, PeriodicChannelSender
 
         def sample():
-            return [channel_store.get(i) for i in range(1, 17)]
+            snap = channel_store.snapshot()  # index 0 -> channel 1
+            # Ensure length at least 16
+            if len(snap) < 16:
+                snap = snap + [0.0] * (16 - len(snap))
+            return snap[:16]
 
         port = os.environ.get("UART_PORT") or "loop://"  # pyserial loopback URL
         debug = not os.environ.get("UART_PORT")  # only print when using loopback

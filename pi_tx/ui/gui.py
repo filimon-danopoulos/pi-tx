@@ -129,8 +129,10 @@ class PiTxApp(MDApp):
         )
         scroll.add_widget(self.channel_container)
         root.add_widget(scroll)
+        # Schedule tasks after first frame so layout exists
         Clock.schedule_once(lambda *_: self.refresh_models(), 0)
-        Clock.schedule_interval(self._process_input_events, 0)
+        Clock.schedule_interval(self._process_input_events, 1.0 / 100.0)
+        Clock.schedule_interval(self._poll_store_and_refresh, 1.0 / 30.0)
         return root
 
     def refresh_models(self):
@@ -216,7 +218,7 @@ class PiTxApp(MDApp):
                 "control_type", channels[ch_str].get("type", "unipolar")
             )
             row = ChannelRow(ch, ch_type)
-            row.update_value(channel_store.get(ch))
+            row.update_value(0.0)
             self.channel_rows[ch] = row
             self.channel_container.add_widget(row)
 
@@ -244,14 +246,25 @@ class PiTxApp(MDApp):
     def _process_input_events(self, *_):
         if not self.input_controller:
             return
+        # Drain queue; keep only last value per channel for this frame
         last: Dict[int, float] = {}
         for ch_id, value in self.input_controller.pop_events():
             last[ch_id] = value
-        for ch_id, value in last.items():
-            channel_store.set(ch_id, value)
-            row = self.channel_rows.get(ch_id)
-            if row:
-                row.update_value(value)
+        if not last:
+            return
+        # Batch update store; UI will poll separately
+        channel_store.set_many(last)
+
+    def _poll_store_and_refresh(self, *_):
+        snap = channel_store.snapshot()
+        for ch, row in self.channel_rows.items():
+            idx = ch - 1
+            if 0 <= idx < len(snap):
+                val = snap[idx]
+            else:
+                val = 0.0
+            if row.bar.value != val:
+                row.update_value(val)
 
     def _autoload_last_model(self):
         try:
