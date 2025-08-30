@@ -181,6 +181,21 @@ class PiTxApp(MDApp):
         model = self._model_repo.load_model(model_name)
         self._current_model = model
         self.selected_model = model.name
+        # Configure channel types first so reversal logic can respect type-specific inversion
+        try:
+            types_map = {
+                ch_id: cfg.control_type for ch_id, cfg in model.channels.items()
+            }
+            channel_store.configure_channel_types(types_map)
+        except Exception as e:
+            print(f"Warning: failed to configure channel types: {e}")
+        # Apply processors (e.g. reverse) from the loaded model to the global channel_store
+        try:
+            channel_store.configure_processors(model.processors)
+        except Exception as e:
+            print(
+                f"Warning: failed to configure processors for model {model_name}: {e}"
+            )
         self.model_mapping = {
             "name": model.name,
             "channels": {

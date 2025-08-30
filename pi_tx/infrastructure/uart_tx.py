@@ -239,7 +239,7 @@ class MultiSerialTX:
                     ms = int((now - int_part) * 1000)
                     ts = time.strftime("%H:%M:%S", time.localtime(int_part))
                     backend = "pg" if self._backend == "pigpio" else "py"
-                    print(f"[{ts}.{ms:03d}] UART({backend}) frame: {frame.hex()}")
+                    # print(f"[{ts}.{ms:03d}] UART({backend}) frame: {frame.hex()}")
             except SerialTimeoutException as e:
                 self._error_count += 1
                 now = time.time()
