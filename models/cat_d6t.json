@@ -41,7 +41,7 @@
       "device_name": "Thrustmaster T.16000M",
       "control_code": "289",
       "control_name": "sb-2",
-      "control_type": "button"
+      "control_type": "latching-button"
     },
     "7": {
       "device_path": "/dev/input/by-path/pci-0000:00:14.0-usb-0:2:1.0-event-joystick",

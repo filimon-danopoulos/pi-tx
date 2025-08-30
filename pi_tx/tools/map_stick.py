@@ -5,7 +5,7 @@ Invoke via:
 """
 
 from __future__ import annotations
-import json, time
+import json, time, os
 from typing import Dict, Any, Optional, Tuple
 from evdev import InputDevice, ecodes, list_devices
 from pi_tx.config.settings import STICK_MAPPING_FILE, MAPPINGS_DIR
@@ -89,20 +89,45 @@ def save_mapping(mapping: Dict[str, Any]):
     print(f"Saved mapping to {STICK_MAPPING_FILE}")
 
 
+def _stable_device_path(dev: InputDevice) -> str:
+    """Attempt to find a stable /dev/input/by-path symlink for this device.
+
+    Falls back to the raw event device if no by-path symlink resolves to the same
+    real device. This helps mappings survive event number changes across boots.
+    """
+    try:
+        real = os.path.realpath(dev.path)
+        by_path_dir = "/dev/input/by-path"
+        if os.path.isdir(by_path_dir):
+            for entry in os.listdir(by_path_dir):
+                candidate = os.path.join(by_path_dir, entry)
+                try:
+                    if os.path.realpath(candidate) == real:
+                        return candidate
+                except Exception:
+                    continue
+    except Exception:
+        pass
+    return dev.path
+
+
 def show_device_status(devices, existing):
-    print("\nAvailable devices:\n" + "-" * 70)
-    print(f"{'#':<3} {'Name':<30} {'Path':<22} {'Status':<12}")
-    print("-" * 70)
+    print("\nAvailable devices:\n" + "-" * 90)
+    print(f"{'#':<3} {'Name':<30} {'Stable Path':<50} {'Status':<12}")
+    print("-" * 90)
     for i, d in enumerate(devices, 1):
-        status = "Mapped" if d.path in existing else "Not mapped"
-        if status == "Mapped":
-            status += f" ({len(existing[d.path]['controls'])})"
-        print(f"{i:<3} {d.name[:30]:<30} {d.path[:22]:<22} {status:<12}")
+        spath = _stable_device_path(d)
+        status = "Mapped" if spath in existing else "Not mapped"
+        if status.startswith("Mapped"):
+            status += f" ({len(existing[spath]['controls'])})"
+        display_path = spath if len(spath) <= 50 else "…" + spath[-49:]
+        print(f"{i:<3} {d.name[:30]:<30} {display_path:<50} {status:<12}")
 
 
 def create_mapping(dev: InputDevice):
+    stable_path = _stable_device_path(dev)
     device_info = {"name": dev.name, "controls": {}}
-    print(f"\nMapping device: {dev.name} ({dev.path})")
+    print(f"\nMapping device: {dev.name} ({dev.path}) -> {stable_path}")
     print("Move controls; wait 5s of inactivity to finish. Enter to skip a control.")
     while True:
         result = monitor_inputs(dev)
@@ -118,7 +143,16 @@ def create_mapping(dev: InputDevice):
             if input("Remap? (y/N): ").lower() != "y":
                 continue
         if ev_type == ecodes.EV_KEY:
-            ctype = "button"
+            # Ask if this button should latch (toggle) instead of momentary
+            while True:
+                latch_in = input("Latching button? (y/N): ").strip().lower()
+                if latch_in in ("y", "yes"):
+                    ctype = "latching-button"
+                    break
+                if latch_in in ("", "n", "no"):
+                    ctype = "button"
+                    break
+                print("Please answer y or n")
         else:
             print("Axis type: 1) unipolar  2) bipolar")
             while True:
@@ -147,7 +181,7 @@ def create_mapping(dev: InputDevice):
             )
         device_info["controls"][code] = info
         print(f"Mapped {name} (code {code})")
-    return {dev.path: device_info}
+    return {stable_path: device_info}
 
 
 def main(_argv: list[str] | None = None):  # pragma: no cover
@@ -177,7 +211,9 @@ def main(_argv: list[str] | None = None):  # pragma: no cover
             try:
                 dev.grab()
                 new_map = create_mapping(dev)
-                if new_map[dev.path]["controls"]:
+                # Extract the (stable) key we stored under
+                new_key = next(iter(new_map.keys()))
+                if new_map[new_key]["controls"]:
                     existing.update(new_map)
                     save_mapping(existing)
                 else:

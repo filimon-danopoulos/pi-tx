@@ -18,6 +18,9 @@ class InputController:
         self._callbacks: dict[str, dict[int, callable]] = {}
         self._debug = debug
         self._last_values: dict[str, dict[int, float]] = {}
+        # Latching button (formerly faux-switch) support state containers
+        self._latch_states: dict[str, dict[int, int]] = {}
+        self._last_key_raw: dict[str, dict[int, int]] = {}
         self._event_queue: SimpleQueue[tuple[int, float]] = SimpleQueue()
         self._callback_mode = True
         self._channel_map: dict[str, dict[int, int]] = {}
@@ -27,7 +30,7 @@ class InputController:
         except FileNotFoundError:
             print(f"Warning: Mapping file {mapping_file} not found")
             self._mappings = {}
-        # Keep original device path keys (likely by-path / by-id symlinks) prior to alias expansion
+        # Keep original device path keys (likely by-path / by-id) prior to alias expansion
         self._mapping_device_keys: list[str] = [
             k for k in self._mappings.keys() if k.startswith("/dev/input/")
         ]
@@ -153,6 +156,23 @@ class InputController:
         if control["event_type"] != event_type:
             return 0.0
         if event_type == ecodes.EV_KEY:
+            ctype = control.get("type", "button")
+            if ctype in ("latching-button", "faux-switch"):
+                # Initialize dict containers
+                if device_path not in self._latch_states:
+                    self._latch_states[device_path] = {}
+                if device_path not in self._last_key_raw:
+                    self._last_key_raw[device_path] = {}
+                prev_raw = self._last_key_raw[device_path].get(event_code, 0)
+                # Rising edge -> toggle latched state
+                if prev_raw == 0 and value:
+                    current = self._latch_states[device_path].get(event_code, 0)
+                    self._latch_states[device_path][event_code] = 0 if current else 1
+                # Update last raw
+                self._last_key_raw[device_path][event_code] = value
+                # Return latched state as float
+                return float(self._latch_states[device_path].get(event_code, 0))
+            # Regular momentary button -> pass through raw (0/1)
             return float(value)
         if event_type == ecodes.EV_ABS:
             min_val, max_val = control["min"], control["max"]

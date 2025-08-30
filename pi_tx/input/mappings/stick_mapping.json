@@ -69,7 +69,7 @@
       "289": {
         "event_type": 1,
         "name": "sb-2",
-        "type": "button"
+        "type": "latching-button"
       },
       "291": {
         "event_type": 1,
