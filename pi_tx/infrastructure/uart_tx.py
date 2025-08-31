@@ -15,6 +15,13 @@ Logging controls (environment variables):
     PI_TX_UART_DRIFT_INTERVAL=S seconds between rate/drift reports (default 1.0)
     PI_TX_UART_MAX_VALUE_LOG=M  number of channel values to show (default 8)
 
+Binding:
+    The iRX4/MULTI bind bit (byte1 bit7) will be asserted while either the static
+    'bind' attribute is True or a timed bind window is active (started via
+    start_bind()). A timed bind window lasts the requested number of seconds.
+    Env var PI_TX_UART_BIND_AT_START=1 triggers an automatic bind window at open
+    (duration seconds from PI_TX_UART_BIND_SECONDS, default 2).
+
 Usage:
     tx = MultiSerialTX(port='/dev/ttyS0')
         tx.open()
@@ -91,6 +98,8 @@ class MultiSerialTX:
         if os.environ.get("PI_TX_UART_DEBUG") == "1":
             self.debug_print = True
         self._max_value_log = int(os.environ.get("PI_TX_UART_MAX_VALUE_LOG", "8"))
+        # Timed bind window end timestamp (epoch seconds); 0 => inactive
+        self._bind_until = 0.0
 
     def _now_parts(self):
         now = time.time()
@@ -124,6 +133,10 @@ class MultiSerialTX:
             # 100000 8E2: pigpio uses standard 8N1 framing by default; emulate 8E2 by higher-level encoding acceptance (many receivers tolerate). For strict 8E2 hardware, ensure underlying tty configured accordingly if needed.
             self._pig_handle = self._pi.serial_open(self.port_name, 100000, 0)
             self._log(f"Opened port={self.port_name} handle={self._pig_handle}")
+            # Optional automatic bind at startup
+            if os.environ.get("PI_TX_UART_BIND_AT_START") == "1":
+                sec = float(os.environ.get("PI_TX_UART_BIND_SECONDS", "2"))
+                self.start_bind(sec)
         except Exception:
             # Ensure cleanup
             try:
@@ -168,7 +181,9 @@ class MultiSerialTX:
             byte1 |= 0x20
         if self.range_check:
             byte1 |= 0x40
-        if self.bind:
+        # Determine whether bind flag active (static or timed window)
+        active_bind = self.bind or (time.time() < self._bind_until)
+        if active_bind:
             byte1 |= 0x80
         byte2 = (self.rx_num & 0x0F) | ((self.sub_protocol & 0x07) << 4)
         if self.power_low:
@@ -197,6 +212,14 @@ class MultiSerialTX:
                 f"frame#{self._frame_counter} hdr={header:02X},{byte1:02X},{byte2:02X},{frame[3]:02X} first8={frame_bytes[:8].hex()} vals={preview_vals}"
             )
         return frame_bytes
+
+    def start_bind(self, seconds: float = 2.0):
+        if seconds <= 0:
+            return
+        self._bind_until = time.time() + seconds
+        self._log(
+            f"Bind window started for {seconds:.2f}s (until {self._bind_until:.2f})"
+        )
 
     def _drain_loopback(self):
         # No loopback handling in pigpio-only mode

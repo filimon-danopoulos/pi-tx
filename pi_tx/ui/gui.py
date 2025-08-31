@@ -117,6 +117,7 @@ class PiTxApp(MDApp):
         toolbar.right_action_items = [
             ["folder", lambda x: self.open_model_menu(x)],
             ["refresh", lambda x: self.refresh_models()],
+            ["wifi", lambda x: self.trigger_bind()],  # trigger bind window
         ]
         root.add_widget(toolbar)
         self._toolbar = toolbar
@@ -142,6 +143,27 @@ class PiTxApp(MDApp):
             self._model_menu = None
         if not self.selected_model:
             self._autoload_last_model()
+
+    def trigger_bind(self, duration: float = 2.0):
+        try:
+            from ..app import UART_SENDER
+        except Exception:
+            UART_SENDER = None  # type: ignore
+        sender = globals().get("UART_SENDER") or locals().get("UART_SENDER")
+        # Prefer imported global from app
+        try:
+            from .. import app as app_mod
+
+            sender = app_mod.UART_SENDER
+        except Exception:
+            pass
+        if not sender or not getattr(sender, "tx", None):
+            print("Bind: UART sender not active")
+            return
+        try:
+            sender.tx.start_bind(duration)
+        except Exception as e:
+            print(f"Bind trigger failed: {e}")
 
     def open_model_menu(self, caller_widget=None):
         if not getattr(self, "available_models", None):
