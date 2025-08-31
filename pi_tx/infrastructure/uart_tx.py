@@ -15,9 +15,9 @@ Logging controls (environment variables):
     PI_TX_UART_MAX_VALUE_LOG=M  number of channel values to show (default 8)
 
 Binding:
-    The iRX4/MULTI bind bit (byte1 bit7) will be asserted while either the static
-    'bind' attribute is True or a timed bind window is active (started via
-    start_bind()). A timed bind window lasts the requested number of seconds.
+    A timed bind window (start_bind()) or static bind flag suppresses all frame
+    transmission (no serial writes) for its duration. Previously we sent frames
+    with the bind bit set; new requirement: silence during bind window.
     Env var PI_TX_UART_BIND_AT_START=1 triggers an automatic bind window at open
     (duration seconds from PI_TX_UART_BIND_SECONDS, default 2).
 
@@ -150,6 +150,7 @@ class MultiSerialTX:
         self._max_value_log = int(os.environ.get("PI_TX_UART_MAX_VALUE_LOG", "8"))
         # Timed bind window end timestamp (epoch seconds); 0 => inactive
         self._bind_until = 0.0
+        self._last_bind_suppress_log = 0.0
 
     def _now_parts(self):
         now = time.time()
@@ -320,6 +321,17 @@ class MultiSerialTX:
     def send_frame(self, frame: bytes):
         if self.disabled:
             return
+        # Suppress all transmission while bind window (or static bind flag) active
+        if self.bind_active:
+            if self.debug_print:
+                now = time.time()
+                if now - self._last_bind_suppress_log > 0.5:
+                    try:
+                        self._log("bind window active: transmission suppressed")
+                    except Exception:
+                        pass
+                    self._last_bind_suppress_log = now
+            return
         with self._lock:
             try:
                 if not self._serial:
@@ -343,6 +355,9 @@ class MultiSerialTX:
                     pass
 
     def send_channels(self, ch_values: Sequence[float]):
+        # Suppress transmission (and avoid building frames) during bind window
+        if self.bind_active:
+            return
         frame = self.build_frame(ch_values)
         self.send_frame(frame)
 
