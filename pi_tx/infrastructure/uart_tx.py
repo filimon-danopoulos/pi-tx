@@ -122,8 +122,8 @@ class MultiSerialTX:
         autobind: bool = False,
         bind: bool = False,
         range_check: bool = False,
-    debug_print: bool = False,
-    disabled: bool = False,
+        debug_print: bool = False,
+        disabled: bool = False,
     ):
         # Configuration
         self.port_name = port
@@ -143,7 +143,7 @@ class MultiSerialTX:
         self._error_count = 0
         self._pi = None
         self._pig_handle = None
-        self._baud = 115200
+        self._baud = 100000
         # Logging state
         self._frame_counter = 0
         self._log_every = int(os.environ.get("PI_TX_UART_LOG_EVERY", "0"))
@@ -204,6 +204,7 @@ class MultiSerialTX:
                     detail_lines.append(f"stat failed: {es!r}")
                 try:
                     import pwd, grp
+
                     uid = os.getuid()
                     user = pwd.getpwuid(uid).pw_name  # type: ignore
                     groups = [g.gr_name for g in grp.getgrall() if user in g.gr_mem]  # type: ignore
@@ -269,6 +270,10 @@ class MultiSerialTX:
             byte1 |= 0x40
         # Determine whether bind flag active (static or timed window)
         active_bind = self.bind or (time.time() < self._bind_until)
+        if self.debug_print and self._frame_counter % 25 == 0:
+            self._log(
+                f"bind_state active={active_bind} static={self.bind} until={self._bind_until:.2f} now={time.time():.2f}"
+            )
         if active_bind:
             byte1 |= 0x80
         byte2 = (self.rx_num & 0x0F) | ((self.sub_protocol & 0x07) << 4)
@@ -306,6 +311,15 @@ class MultiSerialTX:
         self._log(
             f"Bind window started for {seconds:.2f}s (until {self._bind_until:.2f})"
         )
+        # Log an immediate frame preview with bind bit expectation
+        try:
+            self._log("Bind flag will be set in outgoing frames during window")
+        except Exception:
+            pass
+
+    @property
+    def bind_active(self) -> bool:
+        return self.bind or (time.time() < self._bind_until)
 
     def _drain_loopback(self):
         # No loopback handling in pigpio-only mode
