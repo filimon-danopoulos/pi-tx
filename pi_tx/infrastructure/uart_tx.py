@@ -8,6 +8,13 @@ Frame format: 16-channel V1 serial frame (26 bytes) as per multiprotocol docs.
 Backend:
     * pigpio serial on Raspberry Pi (pigpiod must be running). No pyserial fallback in this build.
 
+Logging controls (environment variables):
+    PI_TX_UART_DEBUG=1          force verbose frame logging
+    PI_TX_UART_LOG_EVERY=N      log every Nth frame (N>0)
+    PI_TX_UART_RAW_HEX=1        include full frame hex when debug enabled
+    PI_TX_UART_DRIFT_INTERVAL=S seconds between rate/drift reports (default 1.0)
+    PI_TX_UART_MAX_VALUE_LOG=M  number of channel values to show (default 8)
+
 Usage:
     tx = MultiSerialTX(port='/dev/ttyS0')
         tx.open()
@@ -16,7 +23,7 @@ Usage:
 Integrate by periodically calling send_channels(channel_store_snapshot) at ~50Hz.
 """
 from typing import Sequence
-import threading, time, platform
+import threading, time, platform, os
 
 
 # Raspberry Pi detection
@@ -78,6 +85,23 @@ class MultiSerialTX:
         self._error_count = 0
         self._pi = None
         self._pig_handle = None
+        # Logging state
+        self._frame_counter = 0
+        self._log_every = int(os.environ.get("PI_TX_UART_LOG_EVERY", "0"))
+        if os.environ.get("PI_TX_UART_DEBUG") == "1":
+            self.debug_print = True
+        self._max_value_log = int(os.environ.get("PI_TX_UART_MAX_VALUE_LOG", "8"))
+
+    def _now_parts(self):
+        now = time.time()
+        int_part = int(now)
+        ms = int((now - int_part) * 1000)
+        ts = time.strftime("%H:%M:%S", time.localtime(int_part))
+        return ts, ms
+
+    def _log(self, msg: str):
+        ts, ms = self._now_parts()
+        print(f"[UART {ts}.{ms:03d}] {msg}")
 
     def open(self):
         if self.disabled:
@@ -91,6 +115,7 @@ class MultiSerialTX:
                 "pigpio module not available; install pigpio and run pigpiod"
             )
         try:
+            self._log("Opening pigpio serial")
             self._pi = pigpio.pi()  # type: ignore
             if not self._pi or not self._pi.connected:
                 raise RuntimeError(
@@ -98,6 +123,7 @@ class MultiSerialTX:
                 )
             # 100000 8E2: pigpio uses standard 8N1 framing by default; emulate 8E2 by higher-level encoding acceptance (many receivers tolerate). For strict 8E2 hardware, ensure underlying tty configured accordingly if needed.
             self._pig_handle = self._pi.serial_open(self.port_name, 100000, 0)
+            self._log(f"Opened port={self.port_name} handle={self._pig_handle}")
         except Exception:
             # Ensure cleanup
             try:
@@ -112,6 +138,7 @@ class MultiSerialTX:
     def close(self):
         try:
             if self._pi and self._pig_handle is not None:
+                self._log("Closing pigpio serial")
                 self._pi.serial_close(self._pig_handle)
         except Exception:
             pass
@@ -160,7 +187,16 @@ class MultiSerialTX:
                     bit_in_byte = bit_pos % 8
                     frame[byte_index] |= 1 << bit_in_byte
                 bit_pos += 1
-        return bytes(frame)
+        frame_bytes = bytes(frame)
+        self._frame_counter += 1
+        if self.debug_print or (
+            self._log_every and (self._frame_counter % self._log_every == 0)
+        ):
+            preview_vals = ",".join(f"{v:+.2f}" for v in vals[: self._max_value_log])
+            self._log(
+                f"frame#{self._frame_counter} hdr={header:02X},{byte1:02X},{byte2:02X},{frame[3]:02X} first8={frame_bytes[:8].hex()} vals={preview_vals}"
+            )
+        return frame_bytes
 
     def _drain_loopback(self):
         # No loopback handling in pigpio-only mode
@@ -174,18 +210,14 @@ class MultiSerialTX:
                 if self._pig_handle is None:
                     raise RuntimeError("pigpio serial not open")
                 self._pi.serial_write(self._pig_handle, frame)  # type: ignore
-                if self.debug_print:
-                    now = time.time()
-                    int_part = int(now)
-                    ms = int((now - int_part) * 1000)
-                    ts = time.strftime("%H:%M:%S", time.localtime(int_part))
-                    # print(f"[{ts}.{ms:03d}] UART(pg) frame: {frame.hex()}")
+                if self.debug_print and os.environ.get("PI_TX_UART_RAW_HEX") == "1":
+                    self._log(f"raw={frame.hex()}")
             except Exception as e:
                 self._error_count += 1
                 now = time.time()
                 if now - self._last_error_print > 2.0:
-                    print(
-                        f"UART write error ({self._error_count} consecutive): {type(e).__name__}: {e!r}"
+                    self._log(
+                        f"WRITE ERROR count={self._error_count} type={type(e).__name__} detail={e!r}"
                     )
                     self._last_error_print = now
                 # Attempt lightweight reopen
@@ -233,9 +265,20 @@ class PeriodicChannelSender:
         start = monotonic()
         frame_index = 0
         interval = self.interval
+        last_report = start
+        drift_interval = float(os.environ.get("PI_TX_UART_DRIFT_INTERVAL", "1.0"))
         while not self._stop.is_set():
             target = start + frame_index * interval
             now = monotonic()
+            if now - last_report >= drift_interval:
+                actual_rate = frame_index / (now - start) if frame_index else 0.0
+                try:
+                    self.tx._log(
+                        f"rate={actual_rate:.2f}Hz frames={frame_index} drift={(now - target):+.4f}s"
+                    )
+                except Exception:
+                    pass
+                last_report = now
             # Sleep until the target time
             if now < target:
                 to_sleep = target - now
@@ -253,7 +296,10 @@ class PeriodicChannelSender:
                 frame = self.tx.build_frame(values)
                 self.tx.send_frame(frame)
             except Exception as e:
-                print(f"Periodic sender error: {e}")
+                try:
+                    self.tx._log(f"LOOP ERROR: {e!r}")
+                except Exception:
+                    print(f"Periodic sender error: {e}")
             frame_index += 1
 
     # PigpioSerialTX class removed; pigpio support integrated into MultiSerialTX
