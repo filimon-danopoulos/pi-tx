@@ -53,9 +53,60 @@ class InputController:
         if self._thread and self._thread.is_alive():
             return False
         self._stop_event.clear()
+        # Discover devices before starting thread so we can prime synchronously
+        self._devices = self._discover()
+        if not self._devices:
+            print("Input controller: no mapped input devices found.")
+            return False
+        # Prime once before launching event loop
+        self.prime_values()
+        # Launch event loop thread
         self._thread = threading.Thread(target=self._input_loop, daemon=True)
         self._thread.start()
         return True
+
+    def prime_values(self):
+        """One-time priming of mapped ABS axes using current hardware state.
+
+        Re-uses _normalize_value, stores baseline in _last_values to avoid duplicate
+        first events, and dispatches via callback or queue depending on mode.
+        Safe to call multiple times; later calls will just update baselines.
+        """
+        try:
+            for dev in self._devices:
+                mapped_codes = self._channel_map.get(dev.path, {})
+                if not mapped_codes:
+                    continue
+                device_controls = self._mappings.get(dev.path, {}).get("controls", {})
+                for code, ch_id in mapped_codes.items():
+                    ctrl = device_controls.get(str(code))
+                    if not ctrl or ctrl.get("event_type") != ecodes.EV_ABS:
+                        continue
+                    try:
+                        abs_info = dev.absinfo(code)
+                    except Exception:
+                        continue
+                    norm = self._normalize_value(
+                        dev.path, ecodes.EV_ABS, code, abs_info.value
+                    )
+                    self._last_values.setdefault(dev.path, {})[code] = norm
+                    if self._callback_mode:
+                        cb = self._callbacks.get(dev.path, {}).get(code)
+                        if cb:
+                            try:
+                                cb(norm)
+                            except Exception as e:
+                                print(
+                                    f"Error in priming callback {dev.path} {code}: {e}"
+                                )
+                    else:
+                        if ch_id is not None:
+                            self.enqueue_channel_value(ch_id, norm)
+                    if self._debug:
+                        print(f"Primed ABS dev={dev.path} code={code} norm={norm:.3f}")
+        except Exception as e:
+            if self._debug:
+                print(f"Priming failed: {e}")
 
     def stop(self):
         if not self._thread:
@@ -189,10 +240,7 @@ class InputController:
         return 0.0
 
     def _input_loop(self):
-        self._devices = self._discover()
-        if not self._devices:
-            print("Input controller: no mapped input devices found.")
-            return
+        # Devices already discovered & primed in start()
         try:
             while not self._stop_event.is_set():
                 r, _, _ = select.select([d.fd for d in self._devices], [], [], 0.25)

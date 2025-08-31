@@ -1,13 +1,9 @@
 from __future__ import annotations
-from typing import Iterable, Mapping, Any, Callable, List, Dict
+from typing import Mapping, Any, Callable, List, Dict
 
 
 class ChannelStore:
-    """Channel state container with raw values and a processor pipeline (zero-based).
-
-    All internal lists are standard zero-based arrays. Processors are pure
-    functions returning new lists (identity, reverse, clamp).
-    """
+    """Channel state container with raw values and a processor pipeline (zero-based)."""
 
     def __init__(self, size: int = 10):
         self._raw: List[float] = [0.0] * size
@@ -15,12 +11,11 @@ class ChannelStore:
         self._reverse_flags: List[bool] = [False] * size
         self._channel_types: List[str] = ["unipolar"] * size
         self._endpoint_ranges: List[tuple[float, float]] = [(-1.0, 1.0)] * size
-        # Differential mixes: list of (left_idx, right_idx) channel pairs
         self._differential_mixes: List[tuple[int, int]] = []
         self._build_pipeline()
 
     def _build_pipeline(self):
-        self._processors: List[Callable] = [
+        self._processors: List[Callable[[List[float]], List[float]]] = [
             self._identity_proc,
             self._reverse_proc,
             self._differential_mix_proc,
@@ -28,12 +23,10 @@ class ChannelStore:
         ]
         self._recompute()
 
-    # Processor methods ---------------------------------------------
     def _identity_proc(self, values: List[float]) -> List[float]:
         return values[:]
 
     def _reverse_proc(self, values: List[float]) -> List[float]:
-
         def reverse_value(i: int, value: float) -> float:
             if not self._reverse_flags[i]:
                 return value
@@ -51,7 +44,6 @@ class ChannelStore:
             for i in range(len(values))
         ]
 
-    # Differential mix processor (tank steering style)
     def _differential_mix_proc(self, values: List[float]) -> List[float]:
         if not self._differential_mixes:
             return values
@@ -77,18 +69,11 @@ class ChannelStore:
         rev = processors_cfg.get("reverse") or {}
         for key, val in rev.items():
             try:
-                # Reverse mapping channels are 1-based booleans; convert to 0-based index
                 idx = int(key) - 1
-                if 0 <= idx < len(self._reverse_flags):
-                    if isinstance(val, bool):
-                        self._reverse_flags[idx] = val
-                    else:
-                        print(
-                            f"ChannelStore: reverse value for channel {key} must be boolean, got {type(val).__name__}; ignoring"
-                        )
+                if 0 <= idx < len(self._reverse_flags) and isinstance(val, bool):
+                    self._reverse_flags[idx] = val
             except Exception as e:
                 print(f"ChannelStore: bad reverse entry {key}: {e}")
-        # Differential mixes (list of objects with left/right 1-based ids)
         diff_cfg = processors_cfg.get("differential")
         if isinstance(diff_cfg, list):
             parsed: List[tuple[int, int]] = []
@@ -105,7 +90,6 @@ class ChannelStore:
         self._build_pipeline()
 
     def configure_differential_mixes(self, mixes: List[Dict[str, int]]):
-        """Configure differential mixes using only left/right channel ids (1-based)."""
         parsed: List[tuple[int, int]] = []
         for m in mixes:
             try:
@@ -118,27 +102,17 @@ class ChannelStore:
         self._build_pipeline()
 
     def configure_channel_types(self, channel_types: Dict[int, str]):
-        """Configure channel types using 1-based channel ids.
-
-        Types influence reversal behavior:
-          bipolar: value -> -value when reversed
-          unipolar: value (0..1) -> 1 - value when reversed
-          button: 0/1 -> 1 - value when reversed
-        """
         for ch_id, t in channel_types.items():
             idx = ch_id - 1
             if 0 <= idx < len(self._channel_types):
                 self._channel_types[idx] = t or "unipolar"
-        # No pipeline rebuild needed (types only consulted during reverse)
 
-    # --- Public API -------------------------------------------------
     def size(self) -> int:
         return len(self._raw)
 
     def set_many(self, updates: Mapping[int, float]):
         changed = False
         for ch, val in updates.items():
-            # Incoming channels are 1-based; internal storage is 0-based
             idx = ch - 1
             if 1 <= ch <= len(self._raw) and self._raw[idx] != val:
                 self._raw[idx] = val
@@ -156,7 +130,6 @@ class ChannelStore:
         self._processors = []
         self._recompute()
 
-    # --- Internal --------------------------------------------------
     def _recompute(self):
         cur = self._raw[:]
         for proc in self._processors:
@@ -164,7 +137,6 @@ class ChannelStore:
                 cur = proc(cur)
             except Exception as e:
                 print(f"ChannelStore: processor failed: {e}")
-        # Assign derived
         self._derived[:] = cur
 
 
