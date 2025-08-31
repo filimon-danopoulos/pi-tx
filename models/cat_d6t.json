@@ -61,9 +61,9 @@
       "6": false,
       "7": true
     },
-    "differential": [
-      { "left": 2, "right": 1 },
-      { "left": 4, "right": 3 }
-    ]
+      "differential": [
+        { "left": 2, "right": 1, "inverse": true },
+        { "left": 4, "right": 3, "inverse": false }
+      ]
   }
 }

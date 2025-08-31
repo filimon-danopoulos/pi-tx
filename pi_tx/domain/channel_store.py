@@ -3,7 +3,6 @@ from typing import Mapping, Any, Callable, List, Dict
 
 
 class ChannelStore:
-    """Channel state container with raw values and a processor pipeline (zero-based)."""
 
     def __init__(self, size: int = 10):
         self._raw: List[float] = [0.0] * size
@@ -11,7 +10,7 @@ class ChannelStore:
         self._reverse_flags: List[bool] = [False] * size
         self._channel_types: List[str] = ["unipolar"] * size
         self._endpoint_ranges: List[tuple[float, float]] = [(-1.0, 1.0)] * size
-        self._differential_mixes: List[tuple[int, int]] = []
+        self._differential_mixes: List[tuple[int, int, bool]] = []
         self._build_pipeline()
 
     def _build_pipeline(self):
@@ -49,7 +48,7 @@ class ChannelStore:
             return values
         out = values[:]
         size = len(out)
-        for left_i, right_i in self._differential_mixes:
+        for left_i, right_i, inv in self._differential_mixes:
             if not (0 <= left_i < size and 0 <= right_i < size):
                 continue
             orig_left = out[left_i]
@@ -57,10 +56,9 @@ class ChannelStore:
             left_val = orig_left + orig_right
             right_val = orig_right - orig_left
             scale = max(1.0, abs(left_val), abs(right_val))
-            left_val /= scale
-            right_val /= scale
-            out[left_i] = left_val
-            out[right_i] = right_val
+
+            out[right_i if inv else left_i] = left_val / scale
+            out[left_i if inv else right_i] = right_val / scale
         return out
 
     def configure_processors(self, processors_cfg: Dict[str, Any] | None):
@@ -76,26 +74,28 @@ class ChannelStore:
                 print(f"ChannelStore: bad reverse entry {key}: {e}")
         diff_cfg = processors_cfg.get("differential")
         if isinstance(diff_cfg, list):
-            parsed: List[tuple[int, int]] = []
+            parsed: List[tuple[int, int, bool]] = []
             for m in diff_cfg:
                 if not isinstance(m, dict):
                     continue
                 try:
                     left = int(m.get("left")) - 1
                     right = int(m.get("right")) - 1
-                    parsed.append((left, right))
+                    inverse = bool(m.get("inverse", False))
+                    parsed.append((left, right, inverse))
                 except Exception:
                     continue
             self._differential_mixes = parsed
         self._build_pipeline()
 
-    def configure_differential_mixes(self, mixes: List[Dict[str, int]]):
-        parsed: List[tuple[int, int]] = []
+    def configure_differential_mixes(self, mixes: List[Dict[str, Any]]):
+        parsed: List[tuple[int, int, bool]] = []
         for m in mixes:
             try:
-                left = int(m.get("left")) - 1
-                right = int(m.get("right")) - 1
-                parsed.append((left, right))
+                s = int(m.get("left")) - 1
+                t = int(m.get("right")) - 1
+                inv = bool(m.get("inverse", False))
+                parsed.append((s, t, inv))
             except Exception:
                 continue
         self._differential_mixes = parsed
