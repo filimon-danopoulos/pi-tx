@@ -21,10 +21,12 @@ def run():
     if ON_PI:
         try:
             from .infrastructure.uart_tx import MultiSerialTX, PeriodicChannelSender
+
             # Show detection reasons if debug requested
             if os.environ.get("PI_TX_UART_DETECT_DEBUG") == "1":
                 try:
                     from .infrastructure.uart_tx import _ON_PI_RESULT  # type: ignore
+
                     print(f"UART detection detail: {_ON_PI_RESULT[1]}")
                 except Exception:
                     pass
@@ -83,7 +85,9 @@ def retry_uart_init():
         print("UART retry: detection import failed")
         return False
     if not ON_PI:
-        print("UART retry: not detected as Raspberry Pi (set PI_TX_FORCE_PI=1 to override)")
+        print(
+            "UART retry: not detected as Raspberry Pi (set PI_TX_FORCE_PI=1 to override)"
+        )
         return False
     try:
         from .infrastructure.uart_tx import MultiSerialTX, PeriodicChannelSender
