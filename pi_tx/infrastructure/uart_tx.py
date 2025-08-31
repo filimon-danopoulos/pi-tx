@@ -15,9 +15,9 @@ Logging controls (environment variables):
     PI_TX_UART_MAX_VALUE_LOG=M  number of channel values to show (default 8)
 
 Binding:
-    A timed bind window (start_bind()) or static bind flag suppresses all frame
-    transmission (no serial writes) for its duration. Previously we sent frames
-    with the bind bit set; new requirement: silence during bind window.
+    A timed bind window (start_bind()) or static bind flag causes the bind bit
+    (byte1 bit7) to be asserted in every transmitted frame for the duration.
+    Frames continue to flow; no transmission silence during bind.
     Env var PI_TX_UART_BIND_AT_START=1 triggers an automatic bind window at open
     (duration seconds from PI_TX_UART_BIND_SECONDS, default 2).
 
@@ -79,8 +79,7 @@ def _detect_raspberry_pi() -> tuple[bool, str]:
                 )
     except Exception as e:
         reasons.append(f"model file read failed: {e!r}")
-    # /proc/cpuinfo SoC hints
-    try:
+        # /proc/cpuinfo SoC hints
         with open("/proc/cpuinfo", "r") as f:
             cpuinfo = f.read().lower()
             if "raspberry pi" in cpuinfo or "bcm27" in cpuinfo or "bcm28" in cpuinfo:
@@ -107,14 +106,29 @@ ON_PI = _ON_PI_RESULT[0]
 if os.environ.get("PI_TX_UART_DETECT_DEBUG") == "1":
     print(f"[UART DETECT] ON_PI={ON_PI} reasons: {_ON_PI_RESULT[1]}")
 
+# Protocol constants (numeric IDs as used by MULTI serial spec).
+# AFHDS2A protocol ID = 28 (decimal) / 0x1C
+PROTOCOL_AFHDS2A: int = 28
+SUBP_AFHDS2A_PWM_IBUS = 0
+SUBP_AFHDS2A_PPM_IBUS = 1
+SUBP_AFHDS2A_PWM_SBUS = 2
+SUBP_AFHDS2A_PPM_SBUS = 3
+SUBP_AFHDS2A_GYRO_OFF = 4
+SUBP_AFHDS2A_GYRO_ON = 5
+SUBP_AFHDS2A_GYRO_ON_REV = 6
+PROTOCOL_AFHDS2A: int | None = None  # set the correct integer ID for AFHDS2A
+_PROTOCOL_NAME_MAP: dict[str, str] = {
+    "afhds2a": "AFHDS2A",
+}
+
 
 class MultiSerialTX:
     def __init__(
         self,
         port: str,
         *,
-        protocol: int = 0,
-        sub_protocol: int = 0,
+        protocol: int = PROTOCOL_AFHDS2A,  # default FS-iA10B (AFHDS2A)
+        sub_protocol: int = SUBP_AFHDS2A_PWM_IBUS,  # PWM/iBUS output
         rx_num: int = 0,
         option: int = 0,
         power_low: bool = False,
@@ -150,7 +164,60 @@ class MultiSerialTX:
         self._max_value_log = int(os.environ.get("PI_TX_UART_MAX_VALUE_LOG", "8"))
         # Timed bind window end timestamp (epoch seconds); 0 => inactive
         self._bind_until = 0.0
-        self._last_bind_suppress_log = 0.0
+        # legacy suppression log removed (we keep frames flowing during bind)
+        # Environment overrides for protocol selection
+        # 1. Explicit numeric override
+        env_pid = os.environ.get("PI_TX_PROTOCOL_ID")
+        if env_pid:
+            try:
+                self.protocol = int(env_pid, 0)
+            except ValueError:
+                pass
+        # Channel count heuristic: FS-iA10B uses 10 primary channels (set 10 by default for AFHDS2A)
+        self.max_channels = 10 if self.protocol == PROTOCOL_AFHDS2A else 16
+        # 2. Name-based mapping (currently only AFHDS2A placeholder)
+        env_pname = os.environ.get("PI_TX_PROTOCOL_NAME", "").lower()
+        if env_pname:
+            if env_pname in _PROTOCOL_NAME_MAP:
+                if env_pname == "afhds2a":
+                    self.protocol = PROTOCOL_AFHDS2A
+        # Ensure cap
+        if self.max_channels > 16:
+            self.max_channels = 16
+        env_sp = os.environ.get("PI_TX_SUB_PROTOCOL")
+        if env_sp:
+            try:
+                self.sub_protocol = int(env_sp, 0) & 0x1F
+            except ValueError:
+                pass
+        # Sub protocol name override (afhds2a only)
+        env_sp_name = os.environ.get("PI_TX_SUB_PROTOCOL_NAME", "").lower()
+        if env_sp_name:
+            afhds2a_subs = {
+                "pwm_ibus": SUBP_AFHDS2A_PWM_IBUS,
+                "ppm_ibus": SUBP_AFHDS2A_PPM_IBUS,
+                "pwm_sbus": SUBP_AFHDS2A_PWM_SBUS,
+                "ppm_sbus": SUBP_AFHDS2A_PPM_SBUS,
+                "gyro_off": SUBP_AFHDS2A_GYRO_OFF,
+                "gyro_on": SUBP_AFHDS2A_GYRO_ON,
+                "gyro_on_rev": SUBP_AFHDS2A_GYRO_ON_REV,
+            }
+            if env_sp_name in afhds2a_subs:
+                self.sub_protocol = afhds2a_subs[env_sp_name]
+        # Channel count heuristic: default 16, AFHDS2A typical 14 / 10; allow env override
+        self.max_channels = 16
+        env_mc = os.environ.get("PI_TX_MAX_CHANNELS")
+        if env_mc:
+            try:
+                self.max_channels = max(1, min(16, int(env_mc)))
+            except ValueError:
+                pass
+        else:
+            if (
+                PROTOCOL_AFHDS2A is not None and self.protocol == PROTOCOL_AFHDS2A
+            ) and self.max_channels > 10:
+                self.max_channels = 10  # typical receiver channel count
+                self.max_channels = 10  # FS-iA10B typical active channels
 
     def _now_parts(self):
         now = time.time()
@@ -245,8 +312,12 @@ class MultiSerialTX:
             self._serial = None
 
     def build_frame(self, ch_values: Sequence[float]) -> bytes:
-        # Expect up to 16 channels (use 0 for missing)
-        vals = list(ch_values[:16]) + [0.0] * (16 - len(ch_values))
+        # Expect up to max_channels (pad to 16 for packing)
+        mc = getattr(self, "max_channels", 16)
+        vals = list(ch_values[:mc]) + [0.0] * (mc - len(ch_values))
+        # Always extend to 16 for the wire format (unused channels zeroed)
+        if len(vals) < 16:
+            vals.extend([0.0] * (16 - len(vals)))
 
         # Convert to 0..2047 range (approx mapping from -1..+1)
         def to_raw(v: float) -> int:
@@ -321,17 +392,6 @@ class MultiSerialTX:
     def send_frame(self, frame: bytes):
         if self.disabled:
             return
-        # Suppress all transmission while bind window (or static bind flag) active
-        if self.bind_active:
-            if self.debug_print:
-                now = time.time()
-                if now - self._last_bind_suppress_log > 0.5:
-                    try:
-                        self._log("bind window active: transmission suppressed")
-                    except Exception:
-                        pass
-                    self._last_bind_suppress_log = now
-            return
         with self._lock:
             try:
                 if not self._serial:
@@ -355,9 +415,6 @@ class MultiSerialTX:
                     pass
 
     def send_channels(self, ch_values: Sequence[float]):
-        # Suppress transmission (and avoid building frames) during bind window
-        if self.bind_active:
-            return
         frame = self.build_frame(ch_values)
         self.send_frame(frame)
 
