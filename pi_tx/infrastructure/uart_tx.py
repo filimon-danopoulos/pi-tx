@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-"""UART transmission of channel data to a MULTI / iRX4 style module (100000 8E2).
+"""UART transmission of channel data to a MULTI / iRX4 style module (115200 baud).
 
 Single class (MultiSerialTX) handles both frame construction and transmission.
 Frame format: 16-channel V1 serial frame (26 bytes) as per multiprotocol docs.
@@ -122,15 +122,15 @@ class MultiSerialTX:
         autobind: bool = False,
         bind: bool = False,
         range_check: bool = False,
-        debug_print: bool = False,
-        disabled: bool = False,
+    debug_print: bool = False,
+    disabled: bool = False,
     ):
         # Configuration
         self.port_name = port
-        self.protocol = protocol  # 0..63 (we stay <32 for now)
-        self.sub_protocol = sub_protocol  # 0..7
-        self.rx_num = rx_num  # 0..15
-        self.option = option  # signed 8bit
+        self.protocol = protocol
+        self.sub_protocol = sub_protocol
+        self.rx_num = rx_num
+        self.option = option
         self.power_low = power_low
         self.autobind = autobind
         self.bind = bind
@@ -143,6 +143,7 @@ class MultiSerialTX:
         self._error_count = 0
         self._pi = None
         self._pig_handle = None
+        self._baud = 115200
         # Logging state
         self._frame_counter = 0
         self._log_every = int(os.environ.get("PI_TX_UART_LOG_EVERY", "0"))
@@ -181,9 +182,12 @@ class MultiSerialTX:
                 raise RuntimeError(
                     "pigpio daemon not running (start with: sudo pigpiod)"
                 )
-            # 100000 8E2: pigpio uses standard 8N1 framing by default; emulate 8E2 by higher-level encoding acceptance (many receivers tolerate). For strict 8E2 hardware, ensure underlying tty configured accordingly if needed.
-            self._pig_handle = self._pi.serial_open(self.port_name, 100000, 0)
-            self._log(f"Opened port={self.port_name} handle={self._pig_handle}")
+            # Fixed baud rate (spec confirmed) – no fallback logic
+            self._log(f"Opening serial at fixed baud={self._baud}")
+            self._pig_handle = self._pi.serial_open(self.port_name, self._baud, 0)  # type: ignore
+            self._log(
+                f"Opened port={self.port_name} handle={self._pig_handle} baud={self._baud}"
+            )
             # Optional automatic bind at startup
             if os.environ.get("PI_TX_UART_BIND_AT_START") == "1":
                 sec = float(os.environ.get("PI_TX_UART_BIND_SECONDS", "2"))
