@@ -349,10 +349,24 @@ class MultiSerialTX:
             vals.extend([0.0] * (16 - len(vals)))
 
         # Convert to 0..2047 range (approx mapping from -1..+1)
-        def to_raw(v: float) -> int:
-            v = max(-1.0, min(1.0, v))
+        def to_raw(v) -> int:
+            # Sanitize None / non-numeric
+            try:
+                if v is None:
+                    v = 0.0
+                v = float(v)
+            except Exception:
+                v = 0.0
+            if v > 1.0:
+                v = 1.0
+            elif v < -1.0:
+                v = -1.0
             raw = int(round((v * 0.5 + 0.5) * 2047))
-            return max(0, min(2047, raw))
+            if raw < 0:
+                return 0
+            if raw > 2047:
+                return 2047
+            return raw
 
         raws = [to_raw(v) for v in vals]
         header = 0x55 if self.protocol < 32 else 0x54  # we keep protocol <32 now
