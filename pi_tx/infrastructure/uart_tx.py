@@ -33,22 +33,73 @@ from typing import Sequence
 import threading, time, platform, os
 
 
-# Raspberry Pi detection
-def _is_raspberry_pi() -> bool:
+"""Raspberry Pi detection with environment overrides.
+
+Environment overrides:
+  PI_TX_FORCE_PI=1      Force ON_PI True
+  PI_TX_FORCE_NO_PI=1   Force ON_PI False
+  PI_TX_UART_DETECT_DEBUG=1  Print detection reasoning at import time
+"""
+
+
+def _detect_raspberry_pi() -> tuple[bool, str]:
+    # Order of checks; accumulate reasons
+    force_pi = os.environ.get("PI_TX_FORCE_PI") == "1"
+    force_no = os.environ.get("PI_TX_FORCE_NO_PI") == "1"
+    if force_pi and force_no:
+        return False, "Both PI_TX_FORCE_PI and PI_TX_FORCE_NO_PI set; treating as False"
+    if force_pi:
+        return True, "Forced True via PI_TX_FORCE_PI"
+    if force_no:
+        return False, "Forced False via PI_TX_FORCE_NO_PI"
+    reasons = []
     try:
-        if "raspberrypi" in platform.uname().nodename.lower():
-            return True
-        # Check device tree model
+        node = platform.uname().nodename.lower()
+        if "raspberry" in node:
+            reasons.append(f"nodename contains 'raspberry' ({node})")
+    except Exception as e:
+        reasons.append(f"nodename check failed: {e!r}")
+    detected = False
+    # Device tree model
+    try:
         with open("/sys/firmware/devicetree/base/model", "r") as f:
             model = f.read().lower()
             if "raspberry pi" in model:
-                return True
-    except Exception:
-        pass
-    return False
+                reasons.append(f"model file contains 'raspberry pi' ({model.strip()})")
+                detected = True
+            else:
+                reasons.append(
+                    f"model file does not mention raspberry pi ({model.strip()})"
+                )
+    except Exception as e:
+        reasons.append(f"model file read failed: {e!r}")
+    # /proc/cpuinfo SoC hints
+    try:
+        with open("/proc/cpuinfo", "r") as f:
+            cpuinfo = f.read().lower()
+            if "raspberry pi" in cpuinfo or "bcm27" in cpuinfo or "bcm28" in cpuinfo:
+                reasons.append("cpuinfo contains raspberry/bcm27/bcm28")
+                detected = True or detected
+    except Exception as e:
+        reasons.append(f"cpuinfo read failed: {e!r}")
+    # OS release ID
+    try:
+        with open("/etc/os-release", "r") as f:
+            osrel = f.read().lower()
+            if "raspbian" in osrel or "debian" in osrel and "raspberry" in osrel:
+                reasons.append("os-release suggests raspbian")
+                detected = True or detected
+    except Exception as e:
+        reasons.append(f"os-release read failed: {e!r}")
+    if not detected and any("nodename contains" in r for r in reasons):
+        detected = True  # nodename heuristic
+    return detected, "; ".join(reasons)
 
 
-ON_PI = _is_raspberry_pi()
+_ON_PI_RESULT = _detect_raspberry_pi()
+ON_PI = _ON_PI_RESULT[0]
+if os.environ.get("PI_TX_UART_DETECT_DEBUG") == "1":
+    print(f"[UART DETECT] ON_PI={ON_PI} reasons: {_ON_PI_RESULT[1]}")
 
 try:
     import pigpio  # type: ignore
