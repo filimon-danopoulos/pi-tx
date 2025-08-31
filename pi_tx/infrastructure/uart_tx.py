@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-"""UART transmission of channel data to a MULTI / iRX4 style module (115200 baud).
+"""UART transmission of channel data to a MULTI / iRX4 style module (100000 baud 8E2) using pyserial.
 
 Single class (MultiSerialTX) handles both frame construction and transmission.
-Frame format: 16-channel V1 serial frame (26 bytes) as per multiprotocol docs.
+Frame format: 16-channel V1 serial frame (26 bytes) per multiprotocol docs.
 
-Backend:
-    * pigpio serial on Raspberry Pi (pigpiod must be running). No pyserial fallback in this build.
+Backend: pyserial only (pigpio legacy removed).
 
 Logging controls (environment variables):
     PI_TX_UART_DEBUG=1          force verbose frame logging
@@ -31,6 +30,13 @@ Integrate by periodically calling send_channels(channel_store_snapshot) at ~50Hz
 """
 from typing import Sequence
 import threading, time, platform, os
+
+try:
+    import serial  # type: ignore
+
+    HAVE_PYSERIAL = True
+except Exception:
+    HAVE_PYSERIAL = False
 
 
 """Raspberry Pi detection with environment overrides.
@@ -101,13 +107,6 @@ ON_PI = _ON_PI_RESULT[0]
 if os.environ.get("PI_TX_UART_DETECT_DEBUG") == "1":
     print(f"[UART DETECT] ON_PI={ON_PI} reasons: {_ON_PI_RESULT[1]}")
 
-try:
-    import pigpio  # type: ignore
-
-    HAVE_PIGPIO = True
-except Exception:
-    HAVE_PIGPIO = False
-
 
 class MultiSerialTX:
     def __init__(
@@ -141,8 +140,7 @@ class MultiSerialTX:
         self._lock = threading.Lock()
         self._last_error_print = 0.0
         self._error_count = 0
-        self._pi = None
-        self._pig_handle = None
+        self._serial = None
         self._baud = 100000
         # Logging state
         self._frame_counter = 0
@@ -167,58 +165,55 @@ class MultiSerialTX:
     def open(self):
         if self.disabled:
             return
-        if self._pig_handle is not None:
+        if self._serial is not None:
             return
         if not ON_PI:
             raise RuntimeError("UART enabled only on Raspberry Pi in this build")
-        if not HAVE_PIGPIO:
-            raise RuntimeError(
-                "pigpio module not available; install pigpio and run pigpiod"
-            )
+        if not HAVE_PYSERIAL:
+            raise RuntimeError("pyserial module not available; pip install pyserial")
         try:
-            self._log("Opening pigpio serial")
-            self._pi = pigpio.pi()  # type: ignore
-            if not self._pi or not self._pi.connected:
-                raise RuntimeError(
-                    "pigpio daemon not running (start with: sudo pigpiod)"
-                )
-            # Fixed baud rate (spec confirmed) – no fallback logic
-            self._log(f"Opening serial at fixed baud={self._baud}")
-            try:
-                self._pig_handle = self._pi.serial_open(self.port_name, self._baud, 0)  # type: ignore
-            except Exception as e_open:
-                # Gather diagnostics
-                detail_lines = [
-                    f"serial_open failed: {type(e_open).__name__}: {e_open}",
-                    f"device={self.port_name}",
-                ]
+            self._log("Opening pyserial port")
+            candidates = [self.port_name]
+            if self.port_name == "/dev/serial0":
+                candidates.extend(["/dev/ttyAMA0", "/dev/ttyS0"])  # typical Pi names
+            ser = None
+            first_err = None
+            for p in candidates:
                 try:
-                    st = os.stat(self.port_name)
-                    mode = oct(st.st_mode & 0o777)
-                    detail_lines.append(
-                        f"exists mode={mode} uid={st.st_uid} gid={st.st_gid}"
+                    ser = serial.Serial(
+                        port=p,
+                        baudrate=self._baud,
+                        bytesize=serial.EIGHTBITS,
+                        parity=serial.PARITY_EVEN,
+                        stopbits=serial.STOPBITS_TWO,
+                        timeout=0,
+                        write_timeout=0.05,
+                        exclusive=True,
                     )
-                except FileNotFoundError:
-                    detail_lines.append("device does not exist (FileNotFoundError)")
-                except Exception as es:
-                    detail_lines.append(f"stat failed: {es!r}")
-                try:
-                    import pwd, grp
-
-                    uid = os.getuid()
-                    user = pwd.getpwuid(uid).pw_name  # type: ignore
-                    groups = [g.gr_name for g in grp.getgrall() if user in g.gr_mem]  # type: ignore
-                    detail_lines.append(f"user={user} groups={','.join(groups)}")
-                except Exception:
-                    pass
-                detail_lines.append(
-                    "Hints: ensure 'Enable Serial Port' ON and 'Login Shell over Serial' OFF in raspi-config; disable getty (serial-getty@); set correct port (/dev/ttyAMA0 or /dev/serial0); stop any console using it; run 'ls -l /dev/serial*' to inspect symlinks."
-                )
-                msg = " | ".join(detail_lines)
-                self._log(msg)
-                raise RuntimeError(msg) from e_open
+                    self.port_name = p
+                    break
+                except Exception as e:
+                    if first_err is None:
+                        first_err = e
+            if ser is None:
+                diag = [
+                    f"open failed starting from {self.port_name} first_error={first_err}",
+                ]
+                for p in candidates:
+                    try:
+                        st = os.stat(p)
+                        diag.append(
+                            f"{p}:exists mode={oct(st.st_mode & 0o777)} uid={st.st_uid} gid={st.st_gid}"
+                        )
+                    except FileNotFoundError:
+                        diag.append(f"{p}:missing")
+                    except Exception as es:
+                        diag.append(f"{p}:stat_err={es}")
+                self._log(" | ".join(diag))
+                raise RuntimeError("UART open failed (pyserial)")
+            self._serial = ser
             self._log(
-                f"Opened port={self.port_name} handle={self._pig_handle} baud={self._baud}"
+                f"Opened port={self.port_name} baud={self._baud} 8E2 via pyserial"
             )
             # Optional automatic bind at startup
             if os.environ.get("PI_TX_UART_BIND_AT_START") == "1":
@@ -227,29 +222,26 @@ class MultiSerialTX:
         except Exception:
             # Ensure cleanup
             try:
-                if self._pi:
-                    self._pi.stop()
+                if self._serial:
+                    self._serial.close()
             except Exception:
                 pass
-            self._pi = None
-            self._pig_handle = None
+            self._serial = None
             raise
 
     def close(self):
         try:
-            if self._pi and self._pig_handle is not None:
-                self._log("Closing pigpio serial")
-                self._pi.serial_close(self._pig_handle)
+            if self._serial:
+                self._log("Closing serial port")
+                try:
+                    self._serial.flush()
+                except Exception:
+                    pass
+                self._serial.close()
         except Exception:
             pass
         finally:
-            self._pig_handle = None
-            if self._pi:
-                try:
-                    self._pi.stop()
-                except Exception:
-                    pass
-                self._pi = None
+            self._serial = None
 
     def build_frame(self, ch_values: Sequence[float]) -> bytes:
         # Expect up to 16 channels (use 0 for missing)
@@ -322,7 +314,7 @@ class MultiSerialTX:
         return self.bind or (time.time() < self._bind_until)
 
     def _drain_loopback(self):
-        # No loopback handling in pigpio-only mode
+        # No loopback handling
         return
 
     def send_frame(self, frame: bytes):
@@ -330,9 +322,9 @@ class MultiSerialTX:
             return
         with self._lock:
             try:
-                if self._pig_handle is None:
-                    raise RuntimeError("pigpio serial not open")
-                self._pi.serial_write(self._pig_handle, frame)  # type: ignore
+                if not self._serial:
+                    raise RuntimeError("serial not open")
+                self._serial.write(frame)
                 if self.debug_print and os.environ.get("PI_TX_UART_RAW_HEX") == "1":
                     self._log(f"raw={frame.hex()}")
             except Exception as e:
@@ -343,8 +335,8 @@ class MultiSerialTX:
                         f"WRITE ERROR count={self._error_count} type={type(e).__name__} detail={e!r}"
                     )
                     self._last_error_print = now
-                # Attempt lightweight reopen
                 try:
+                    self.close()
                     self.open()
                     self._error_count = 0
                 except Exception:
@@ -425,4 +417,4 @@ class PeriodicChannelSender:
                     print(f"Periodic sender error: {e}")
             frame_index += 1
 
-    # PigpioSerialTX class removed; pigpio support integrated into MultiSerialTX
+    # End of PeriodicChannelSender
