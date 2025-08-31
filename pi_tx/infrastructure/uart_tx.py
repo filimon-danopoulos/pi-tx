@@ -5,23 +5,18 @@ from __future__ import annotations
 Single class (MultiSerialTX) handles both frame construction and transmission.
 Frame format: 16-channel V1 serial frame (26 bytes) as per multiprotocol docs.
 
-Backends:
-    * PySerial (default) including URL handlers like loop:// for development.
-    * Optional pigpio serial (when running on Raspberry Pi with pigpio available)
-        enabled via constructor flag use_pigpio=True. If pigpio init fails it
-        transparently falls back to pyserial.
+Backend:
+    * pigpio serial on Raspberry Pi (pigpiod must be running). No pyserial fallback in this build.
 
 Usage:
-        tx = MultiSerialTX(port='/dev/ttyS0', use_pigpio=True)
+    tx = MultiSerialTX(port='/dev/ttyS0')
         tx.open()
         tx.send_channels([0.0]*16)
 
 Integrate by periodically calling send_channels(channel_store_snapshot) at ~50Hz.
 """
-from typing import Sequence, Optional
-import serial, threading, time, platform
-from serial import serial_for_url
-from serial import SerialTimeoutException
+from typing import Sequence
+import threading, time, platform
 
 
 # Raspberry Pi detection
@@ -64,9 +59,8 @@ class MultiSerialTX:
         range_check: bool = False,
         debug_print: bool = False,
         disabled: bool = False,
-        use_pigpio: bool = False,
     ):
-        # Store configuration
+        # Configuration
         self.port_name = port
         self.protocol = protocol  # 0..63 (we stay <32 for now)
         self.sub_protocol = sub_protocol  # 0..7
@@ -78,96 +72,57 @@ class MultiSerialTX:
         self.range_check = range_check
         self.debug_print = debug_print
         self.disabled = disabled
-        self.use_pigpio_requested = use_pigpio
         # Runtime state
-        self._ser = None  # serial object when active
         self._lock = threading.Lock()
         self._last_error_print = 0.0
         self._error_count = 0
-        # pigpio state (only used if backend == 'pigpio')
         self._pi = None
         self._pig_handle = None
-        self._backend = "pyserial"  # or 'pigpio'
 
     def open(self):
         if self.disabled:
             return
-        # Already open?
-        if self._backend == "pyserial" and self._ser and self._ser.is_open:
+        if self._pig_handle is not None:
             return
-        if self._backend == "pigpio" and self._pig_handle is not None:
-            return
-
-        # Try pigpio first if requested and available
-        if (
-            self.use_pigpio_requested
-            and ON_PI
-            and HAVE_PIGPIO
-            and self._pig_handle is None
-        ):
+        if not ON_PI:
+            raise RuntimeError("UART enabled only on Raspberry Pi in this build")
+        if not HAVE_PIGPIO:
+            raise RuntimeError(
+                "pigpio module not available; install pigpio and run pigpiod"
+            )
+        try:
+            self._pi = pigpio.pi()  # type: ignore
+            if not self._pi or not self._pi.connected:
+                raise RuntimeError(
+                    "pigpio daemon not running (start with: sudo pigpiod)"
+                )
+            # 100000 8E2: pigpio uses standard 8N1 framing by default; emulate 8E2 by higher-level encoding acceptance (many receivers tolerate). For strict 8E2 hardware, ensure underlying tty configured accordingly if needed.
+            self._pig_handle = self._pi.serial_open(self.port_name, 100000, 0)
+        except Exception:
+            # Ensure cleanup
             try:
-                self._pi = pigpio.pi()  # type: ignore
-                if not self._pi or not self._pi.connected:
-                    raise RuntimeError("pigpio daemon not running")
-                # serial_open args: (tty, baud, flags)
-                self._pig_handle = self._pi.serial_open(self.port_name, 100000, 0)
-                self._backend = "pigpio"
-                return
-            except Exception as e:
-                # Fall back to pyserial
-                print(f"pigpio backend unavailable ({e}); falling back to pyserial")
-                # Clean up partial state
+                if self._pi:
+                    self._pi.stop()
+            except Exception:
+                pass
+            self._pi = None
+            self._pig_handle = None
+            raise
+
+    def close(self):
+        try:
+            if self._pi and self._pig_handle is not None:
+                self._pi.serial_close(self._pig_handle)
+        except Exception:
+            pass
+        finally:
+            self._pig_handle = None
+            if self._pi:
                 try:
-                    if self._pi:
-                        self._pi.stop()
+                    self._pi.stop()
                 except Exception:
                     pass
                 self._pi = None
-                self._pig_handle = None
-                self._backend = "pyserial"
-
-        # Open pyserial backend
-        if self._backend != "pigpio":
-            self._backend = "pyserial"
-            # 100000 8E2: bytesize=EIGHTBITS, parity=EVEN, stopbits=2
-            common_kwargs = dict(
-                baudrate=100000,
-                bytesize=serial.EIGHTBITS,
-                parity=serial.PARITY_EVEN,
-                stopbits=serial.STOPBITS_TWO,
-                timeout=0,  # non‑blocking read
-                write_timeout=0.5,  # give writes a little time
-            )
-            try:
-                if "://" in self.port_name:  # use URL handler (loop:// etc.)
-                    self._ser = serial_for_url(self.port_name, **common_kwargs)
-                else:
-                    self._ser = serial.Serial(self.port_name, **common_kwargs)
-            except Exception as e:
-                raise RuntimeError(f"Failed to open serial port {self.port_name}: {e}")
-
-    def close(self):
-        if self._backend == "pyserial":
-            if self._ser:
-                try:
-                    self._ser.close()
-                except Exception:
-                    pass
-                self._ser = None
-        elif self._backend == "pigpio":
-            try:
-                if self._pi and self._pig_handle is not None:
-                    self._pi.serial_close(self._pig_handle)
-            except Exception:
-                pass
-            finally:
-                self._pig_handle = None
-                if self._pi:
-                    try:
-                        self._pi.stop()
-                    except Exception:
-                        pass
-                    self._pi = None
 
     def build_frame(self, ch_values: Sequence[float]) -> bytes:
         # Expect up to 16 channels (use 0 for missing)
@@ -208,47 +163,23 @@ class MultiSerialTX:
         return bytes(frame)
 
     def _drain_loopback(self):
-        """Drain data when using loop:// so write buffer doesn't fill."""
-        if not self._ser:
-            return
-        if "loop://" in self.port_name:
-            try:
-                waiting = self._ser.in_waiting
-                if waiting:
-                    self._ser.read(waiting)
-            except Exception:
-                pass
+        # No loopback handling in pigpio-only mode
+        return
 
     def send_frame(self, frame: bytes):
         if self.disabled:
             return
         with self._lock:
             try:
-                if self._backend == "pigpio":
-                    if self._pig_handle is None:
-                        raise RuntimeError("pigpio serial not open")
-                    self._pi.serial_write(self._pig_handle, frame)  # type: ignore
-                else:  # pyserial
-                    if not self._ser:
-                        raise RuntimeError("Serial port not open")
-                    self._ser.write(frame)
-                    self._drain_loopback()
+                if self._pig_handle is None:
+                    raise RuntimeError("pigpio serial not open")
+                self._pi.serial_write(self._pig_handle, frame)  # type: ignore
                 if self.debug_print:
                     now = time.time()
                     int_part = int(now)
                     ms = int((now - int_part) * 1000)
                     ts = time.strftime("%H:%M:%S", time.localtime(int_part))
-                    backend = "pg" if self._backend == "pigpio" else "py"
-                    # print(f"[{ts}.{ms:03d}] UART({backend}) frame: {frame.hex()}")
-            except SerialTimeoutException as e:
-                self._error_count += 1
-                now = time.time()
-                if now - self._last_error_print > 2.0:
-                    print(
-                        f"UART write timeout ({self._error_count}): {type(e).__name__}"
-                    )
-                    self._last_error_print = now
-                self._drain_loopback()
+                    # print(f"[{ts}.{ms:03d}] UART(pg) frame: {frame.hex()}")
             except Exception as e:
                 self._error_count += 1
                 now = time.time()
@@ -257,14 +188,12 @@ class MultiSerialTX:
                         f"UART write error ({self._error_count} consecutive): {type(e).__name__}: {e!r}"
                     )
                     self._last_error_print = now
-                # Attempt lightweight reopen (pyserial) if closed
-                if self._backend == "pyserial":
-                    if not self._ser or not self._ser.is_open:
-                        try:
-                            self.open()
-                            self._error_count = 0
-                        except Exception:
-                            pass
+                # Attempt lightweight reopen
+                try:
+                    self.open()
+                    self._error_count = 0
+                except Exception:
+                    pass
 
     def send_channels(self, ch_values: Sequence[float]):
         frame = self.build_frame(ch_values)

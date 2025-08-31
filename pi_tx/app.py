@@ -11,41 +11,48 @@ from .ui.gui import create_gui
 def run():
     controller = InputController(debug=False)
     app = create_gui(controller)
-    # UART integration (real port if UART_PORT set, else loopback with console print)
+    # Only enable UART on Raspberry Pi hardware
     try:
-        from .infrastructure.uart_tx import MultiSerialTX, PeriodicChannelSender
+        from .infrastructure.uart_tx import ON_PI
+    except Exception:
+        ON_PI = False  # type: ignore
 
-        def sample():
-            snap = channel_store.snapshot()  # index 0 -> channel 1
-            # Ensure length at least 16
-            if len(snap) < 16:
-                snap = snap + [0.0] * (16 - len(snap))
-            return snap[:16]
-
-        port = os.environ.get("UART_PORT") or "loop://"  # pyserial loopback URL
-        debug = not os.environ.get("UART_PORT")  # only print when using loopback
-        tx = MultiSerialTX(port=port, debug_print=debug)
-        sender = PeriodicChannelSender(tx, sample, rate_hz=50.0)
-        sender.start()
-        global UART_SENDER
-        UART_SENDER = sender
-
-        # Register a shutdown hook so the sender is stopped and serial closed
-        def _shutdown(*_):
-            try:
-                sender.stop()
-            except Exception:
-                pass
-            try:
-                sender.tx.close()
-            except Exception:
-                pass
-
+    if ON_PI:
         try:
-            app.bind(on_stop=_shutdown)
-        except Exception:
-            # If binding fails for any reason, attempt to ensure cleanup at exit
-            pass
-    except Exception as e:
-        print(f"UART init failed: {e}")
+            from .infrastructure.uart_tx import MultiSerialTX, PeriodicChannelSender
+
+            def sample():
+                snap = channel_store.snapshot()
+                if len(snap) < 16:
+                    snap = snap + [0.0] * (16 - len(snap))
+                return snap[:16]
+
+            port = (
+                os.environ.get("UART_PORT") or "/dev/serial0"
+            )  # prefer real port on Pi
+            debug = False  # suppress debug prints on real hardware by default
+            tx = MultiSerialTX(port=port, debug_print=debug)
+            sender = PeriodicChannelSender(tx, sample, rate_hz=50.0)
+            sender.start()
+            global UART_SENDER
+            UART_SENDER = sender
+
+            def _shutdown(*_):
+                try:
+                    sender.stop()
+                except Exception:
+                    pass
+                try:
+                    sender.tx.close()
+                except Exception:
+                    pass
+
+            try:
+                app.bind(on_stop=_shutdown)
+            except Exception:
+                pass
+        except Exception as e:
+            print(f"UART init failed: {e}")
+    else:
+        print("UART disabled (not running on Raspberry Pi)")
     app.run()
