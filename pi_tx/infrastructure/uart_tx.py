@@ -30,6 +30,7 @@ Integrate by periodically calling send_channels(channel_store_snapshot) at ~50Hz
 """
 from typing import Sequence
 import threading, time, platform, os
+import atexit, signal
 
 try:
     import serial  # type: ignore
@@ -234,7 +235,21 @@ class MultiSerialTX:
         if self.disabled:
             return
         if self._serial is not None:
-            return
+            # If an existing serial object is present, verify it's actually open
+            is_open = False
+            try:
+                is_open = getattr(self._serial, "is_open", False)
+            except Exception:
+                is_open = False
+            if is_open:
+                return  # already open
+            else:
+                # stale closed handle; drop and reopen
+                try:
+                    self._serial.close()
+                except Exception:
+                    pass
+                self._serial = None
         if not ON_PI:
             raise RuntimeError("UART enabled only on Raspberry Pi in this build")
         if not HAVE_PYSERIAL:
@@ -310,6 +325,20 @@ class MultiSerialTX:
             pass
         finally:
             self._serial = None
+
+    def is_open(self) -> bool:
+        try:
+            return bool(self._serial and getattr(self._serial, "is_open", False))
+        except Exception:
+            return False
+
+    def reopen_if_needed(self):
+        if not self.is_open() and not self.disabled:
+            try:
+                self.open()
+            except Exception as e:
+                if self.debug_print:
+                    self._log(f"reopen failed: {e!r}")
 
     def build_frame(self, ch_values: Sequence[float]) -> bytes:
         # Expect up to max_channels (pad to 16 for packing)
@@ -444,6 +473,11 @@ class PeriodicChannelSender:
         self._stop.set()
         self._thread.join(timeout=2)
         self._thread = None
+        # Close serial on stop to release exclusive lock for next run
+        try:
+            self.tx.close()
+        except Exception:
+            pass
 
     # nothing to close for console logging
 
@@ -455,6 +489,9 @@ class PeriodicChannelSender:
         last_report = start
         drift_interval = float(os.environ.get("PI_TX_UART_DRIFT_INTERVAL", "1.0"))
         while not self._stop.is_set():
+            # Proactively ensure port remains open
+            if not self.tx.is_open():
+                self.tx.reopen_if_needed()
             target = start + frame_index * interval
             now = monotonic()
             if now - last_report >= drift_interval:
@@ -490,3 +527,24 @@ class PeriodicChannelSender:
             frame_index += 1
 
     # End of PeriodicChannelSender
+
+# Global cleanup: ensure any instantiated MultiSerialTX objects are closed at exit
+_registered_cleanup = False
+_tx_registry: list[MultiSerialTX] = []
+
+def register_tx_instance(tx: MultiSerialTX):
+    global _registered_cleanup
+    _tx_registry.append(tx)
+    if not _registered_cleanup:
+        _registered_cleanup = True
+        def _cleanup(*_args):
+            for inst in list(_tx_registry):
+                try:
+                    inst.close()
+                except Exception:
+                    pass
+        atexit.register(_cleanup)
+        try:
+            signal.signal(signal.SIGTERM, lambda *a: (_cleanup(), os._exit(0)))
+        except Exception:
+            pass
