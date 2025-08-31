@@ -184,7 +184,38 @@ class MultiSerialTX:
                 )
             # Fixed baud rate (spec confirmed) – no fallback logic
             self._log(f"Opening serial at fixed baud={self._baud}")
-            self._pig_handle = self._pi.serial_open(self.port_name, self._baud, 0)  # type: ignore
+            try:
+                self._pig_handle = self._pi.serial_open(self.port_name, self._baud, 0)  # type: ignore
+            except Exception as e_open:
+                # Gather diagnostics
+                detail_lines = [
+                    f"serial_open failed: {type(e_open).__name__}: {e_open}",
+                    f"device={self.port_name}",
+                ]
+                try:
+                    st = os.stat(self.port_name)
+                    mode = oct(st.st_mode & 0o777)
+                    detail_lines.append(
+                        f"exists mode={mode} uid={st.st_uid} gid={st.st_gid}"
+                    )
+                except FileNotFoundError:
+                    detail_lines.append("device does not exist (FileNotFoundError)")
+                except Exception as es:
+                    detail_lines.append(f"stat failed: {es!r}")
+                try:
+                    import pwd, grp
+                    uid = os.getuid()
+                    user = pwd.getpwuid(uid).pw_name  # type: ignore
+                    groups = [g.gr_name for g in grp.getgrall() if user in g.gr_mem]  # type: ignore
+                    detail_lines.append(f"user={user} groups={','.join(groups)}")
+                except Exception:
+                    pass
+                detail_lines.append(
+                    "Hints: ensure 'Enable Serial Port' ON and 'Login Shell over Serial' OFF in raspi-config; disable getty (serial-getty@); set correct port (/dev/ttyAMA0 or /dev/serial0); stop any console using it; run 'ls -l /dev/serial*' to inspect symlinks."
+                )
+                msg = " | ".join(detail_lines)
+                self._log(msg)
+                raise RuntimeError(msg) from e_open
             self._log(
                 f"Opened port={self.port_name} handle={self._pig_handle} baud={self._baud}"
             )
