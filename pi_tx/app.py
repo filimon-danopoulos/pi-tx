@@ -20,7 +20,7 @@ def run():
 
     if ON_PI:
         try:
-            from .infrastructure.uart_tx import UartTx, MultiSerialTX
+            from .infrastructure.uart_tx import UartTx, MultiSerialTX, DebugUartTx
 
             def sample():
                 snap = channel_store.snapshot()
@@ -29,7 +29,11 @@ def run():
                 return snap[:16]
 
             port = os.environ.get("UART_PORT") or "/dev/serial0"
-            uart = UartTx(port=port)
+            debug_mode = bool(os.environ.get("PI_TX_DEBUG_UART"))
+            if debug_mode:
+                uart = DebugUartTx()
+            else:
+                uart = UartTx(port=port)
             if not uart.open():
                 raise Exception(f"Failed to open UART port: {port}")
 
@@ -39,7 +43,12 @@ def run():
 
             global UART_SENDER
             UART_SENDER = tx  # store tx for stop
-            print("UART transmission started (internal sampler)")
+            if debug_mode:
+                print(
+                    "UART debug transmission started (frames captured in DebugUartTx)"
+                )
+            else:
+                print("UART transmission started (internal sampler)")
 
             def _shutdown(*_):
                 try:
@@ -79,7 +88,7 @@ def retry_uart_init():
         )
         return False
     try:
-        from .infrastructure.uart_tx import UartTx, MultiSerialTX
+        from .infrastructure.uart_tx import UartTx, MultiSerialTX, DebugUartTx
 
         def sample():
             snap = channel_store.snapshot()
@@ -88,7 +97,11 @@ def retry_uart_init():
             return snap[:16]
 
         port = os.environ.get("UART_PORT") or "/dev/serial0"
-        uart = UartTx(port=port)
+        debug_mode = bool(os.environ.get("PI_TX_DEBUG_UART"))
+        if debug_mode:
+            uart = DebugUartTx()
+        else:
+            uart = UartTx(port=port)
         if not uart.open():
             raise Exception(f"Failed to open UART port: {port}")
 
@@ -98,7 +111,10 @@ def retry_uart_init():
 
         UART_SENDER = tx
         UART_INIT_ERROR = None
-        print("UART retry successful (internal sampler)")
+        if debug_mode:
+            print("UART retry successful (debug mode, frames captured)")
+        else:
+            print("UART retry successful (internal sampler)")
         return True
     except Exception as e:
         UART_INIT_ERROR = f"{type(e).__name__}: {e}"
@@ -106,3 +122,25 @@ def retry_uart_init():
         if os.environ.get("PI_TX_UART_TRACE") == "1":
             traceback.print_exc()
         return False
+
+
+def dump_debug_frames(limit: int = 5):
+    """Print most recent captured frames when running with PI_TX_DEBUG_UART=1."""
+    tx = globals().get("UART_SENDER")
+    if not tx:
+        print("No UART sender active")
+        return
+    debug_uart = getattr(tx, "_uart", None)
+    if not debug_uart or not hasattr(debug_uart, "all_frames"):
+        print("Not in debug UART mode or no frames captured")
+        return
+    frames = debug_uart.all_frames()
+    if not frames:
+        print("No frames captured yet")
+        return
+    for i, f in enumerate(frames[-limit:], 1):
+        parsed = f.get("parsed", {})
+        chans = parsed.get("channels", [])
+        print(
+            f"[{i}] proto={parsed.get('protocol')} sub={parsed.get('sub_protocol')} bind={parsed.get('bind')} rx={parsed.get('rx_num')} chans={chans[:10]} total={len(chans)}"
+        )
