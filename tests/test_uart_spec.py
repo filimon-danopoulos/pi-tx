@@ -82,3 +82,29 @@ def test_frame_rate_approximation():
     assert (
         len(frames) >= ideal * 0.5
     ), f"Too few frames: got {len(frames)} expected >= {ideal*0.5}"
+
+
+def test_frame_timing_jitter():
+    """Capture timestamps and estimate jitter (std dev) stays reasonable (<6ms)."""
+    from pi_tx.infrastructure.uart_tx import DebugUartTx, MultiSerialTX
+    import statistics
+
+    dbg = DebugUartTx(max_frames=400)
+    dbg.open()
+    target = 45.0
+    tx = MultiSerialTX(dbg, channel_count=2, frame_rate_hz=target)
+    tx.start()
+    time.sleep(0.5)
+    tx.stop()
+    frames = dbg.all_frames()
+    ts = [f["ts"] for f in frames]
+    # Need at least several intervals
+    assert len(ts) > 5
+    intervals = [b - a for a, b in zip(ts, ts[1:])]
+    mean = sum(intervals) / len(intervals)
+    # Mean should be close to target period (within 20%)
+    expected = 1.0 / target
+    assert abs(mean - expected) < expected * 0.2
+    if len(intervals) > 2:
+        stdev = statistics.pstdev(intervals)
+        assert stdev < 0.006  # 6ms std dev upper bound on typical Linux scheduling

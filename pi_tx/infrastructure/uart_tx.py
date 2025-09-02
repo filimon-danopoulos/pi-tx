@@ -459,31 +459,50 @@ class MultiSerialTX:
         """
         Main transmission loop. Sends frames at ~frame_rate_hz.
         """
+        if self._frame_rate_hz <= 0:
+            self._frame_rate_hz = 45.0
         interval = 1.0 / self._frame_rate_hz
-
+        # Use perf_counter for better monotonic timing
+        perf = time.perf_counter
+        next_send = perf()
+        drift_resets = 0
         while not self._stop_flag:
+            now = perf()
+            # Sleep until scheduled send time with drift correction
+            remaining = next_send - now
+            if remaining > 0.0008:  # more than ~0.8ms: coarse sleep then fine spin
+                # Leave ~0.3ms for spin to reduce oversleep
+                coarse = remaining - 0.0003
+                if coarse > 0:
+                    time.sleep(coarse)
+            # Fine wait (spin/yield) until deadline or stop
+            while not self._stop_flag and perf() < next_send:
+                # brief yield to OS
+                time.sleep(0)
+            # Build & send frame
             try:
-                # Update channels from sampler (if any) just before frame build
                 if self._sampler:
                     self._update_channels_from_sampler()
                 frame = self._build_frame()
-                # If debug UART, attach model_id metadata when available
                 if hasattr(self._uart, "send_bytes"):
                     sent = self._uart.send_bytes(frame)
                     try:
                         if sent and self._model_id and hasattr(self._uart, "_frames"):
-                            # mutate last frame entry to append model_id if not already
                             if self._uart._frames:  # type: ignore[attr-defined]
                                 self._uart._frames[-1].setdefault("meta", {})  # type: ignore[attr-defined]
                                 self._uart._frames[-1]["meta"]["model_id"] = self._model_id  # type: ignore[attr-defined]
                     except Exception:
                         pass
             except Exception as e:
-                # Log error but keep trying
                 logging.error(f"MultiSerialTX frame send error: {e}")
-
-            # Sleep for the interval
-            time.sleep(interval)
+            # Schedule next send; correct drift accumulation
+            next_send += interval
+            # If we fell behind by more than one interval, fast-forward
+            behind = perf() - next_send
+            if behind > interval * 0.5:
+                # resync to current time + interval
+                next_send = perf() + interval
+                drift_resets += 1
 
     # ---- Convenience: bind for a duration ----
     def bind_for_seconds(self, duration: float = 2.0):
