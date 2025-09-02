@@ -240,6 +240,19 @@ class PiTxApp(MDApp):
         except Exception as e:
             print(f"Warning: couldn't persist last model: {e}")
 
+        # Apply rx_num to active UART transmitter (if running)
+        try:
+            from .. import app as app_mod
+
+            tx = getattr(app_mod, "UART_SENDER", None)
+            if tx:
+                if hasattr(tx, "set_rx_num"):
+                    tx.set_rx_num(getattr(model, "rx_num", 0))
+                if hasattr(tx, "set_model_id"):
+                    tx.set_model_id(getattr(model, "model_id", None))
+        except Exception as e:
+            print(f"Warning: could not apply rx_num to transmitter: {e}")
+
     def _rebuild_channel_rows(self):
         self.channel_container.clear_widgets()
         self.channel_rows.clear()

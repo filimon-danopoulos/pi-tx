@@ -235,36 +235,38 @@ class MultiSerialTX:
         self,
         uart: UartTx,
         protocol_id: int = PROTO_AFHDS2A,
-        sub_protocol: int = AFHDS2A_PWM_IBUS,  # pick from enum above
-        rx_num: int = 0,  # 0..15 (model slot)
-        option: int = 0,  # fine-tune: -32..+31 (stored as byte)
-        channel_count: int = 10,  # >=10 works; increase if needed
+        sub_protocol: int = AFHDS2A_PWM_IBUS,
+        rx_num: int = 0,
+        option: int = 0,
+        channel_count: int = 10,
         frame_rate_hz: float = 45.0,
     ):
         self._uart = uart
         self._protocol_id = protocol_id
-        self._sub_protocol = sub_protocol
+        self._sub_protocol = sub_protocol & 0x1F
         self._rx_num = rx_num
-        self._option = option  # convert signed -32..+31 to byte 0..255 if needed
+        self._option = option
         self._frame_rate_hz = frame_rate_hz
 
-        # Channels: start at neutral (center 1024 in 0..2047 space)
+        # Channels
         self._num_channels = channel_count
         self._channels = [1024] * self._num_channels
 
-        # Flags: bind, range_check, autobind
+        # Flags
         self._bind_mode = False
         self._range_check = False
         self._autobind = False
 
-        # Periodic frame sender
+        # Threading / sampler
         self._stop_flag = False
         self._sender_thread = None
-        # Optional sampler callback returning channel values; executed in sender thread
         self._sampler = None
-        self._sampler_normalized = True  # assume -1..1 input when sampler set
+        self._sampler_normalized = True
         self._last_sampler_error_log = 0.0
         self._sampler_error_suppression_s = 2.0
+
+        # Model identity (external metadata)
+        self._model_id = None  # filled via set_model_id
 
     # ---- Introspection / helpers (for testing & UI) ----
     def get_channels(self) -> list[int]:
@@ -305,6 +307,13 @@ class MultiSerialTX:
 
     def get_protocol_id(self) -> int:
         return self._protocol_id
+
+    # ---- Model identity (not part of protocol frame) ----
+    def set_model_id(self, model_id: str | None):
+        self._model_id = model_id
+
+    def get_model_id(self) -> Optional[str]:  # pragma: no cover (trivial)
+        return self._model_id
 
     # Internal sampler update extracted for reuse in tests
     def _update_channels_from_sampler(self):
@@ -458,7 +467,17 @@ class MultiSerialTX:
                 if self._sampler:
                     self._update_channels_from_sampler()
                 frame = self._build_frame()
-                self._uart.send_bytes(frame)
+                # If debug UART, attach model_id metadata when available
+                if hasattr(self._uart, "send_bytes"):
+                    sent = self._uart.send_bytes(frame)
+                    try:
+                        if sent and self._model_id and hasattr(self._uart, "_frames"):
+                            # mutate last frame entry to append model_id if not already
+                            if self._uart._frames:  # type: ignore[attr-defined]
+                                self._uart._frames[-1].setdefault("meta", {})  # type: ignore[attr-defined]
+                                self._uart._frames[-1]["meta"]["model_id"] = self._model_id  # type: ignore[attr-defined]
+                    except Exception:
+                        pass
             except Exception as e:
                 # Log error but keep trying
                 logging.error(f"MultiSerialTX frame send error: {e}")

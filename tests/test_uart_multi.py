@@ -226,3 +226,18 @@ def test_channel_count_overflow_ignored():
         hi = chan_bytes[i + 1] & 0x07
         decoded.append(lo | (hi << 8))
     assert decoded == [0, 100, 200, 300]
+
+
+def test_model_id_attached_to_debug_frames():
+    dbg = DebugUartTx()
+    dbg.open()
+    tx = MultiSerialTX(dbg, channel_count=2, frame_rate_hz=25)
+    tx.set_model_id("abc123")
+    tx.start()
+    time.sleep(0.08)
+    tx.stop()
+    frames = dbg.all_frames()
+    assert frames, "No frames captured"
+    # Find a frame with meta.model_id
+    meta_ids = [f.get("meta", {}).get("model_id") for f in frames]
+    assert "abc123" in meta_ids

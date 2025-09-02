@@ -5,7 +5,7 @@ Invoke via:
 """
 
 from __future__ import annotations
-import json
+import json, uuid
 from typing import Dict, Any, List, Tuple, Optional
 from pi_tx.config.settings import MODELS_DIR, STICK_MAPPING_FILE
 
@@ -27,13 +27,27 @@ def get_available_models() -> List[str]:
 def load_existing_model(model_name: str) -> Dict[str, Any]:
     path = MODELS_DIR / f"{model_name}.json"
     if not path.exists():
-        return {"name": model_name, "channels": {}}
+        return {"name": model_name, "channels": {}, "model_id": uuid.uuid4().hex}
     with open(path, "r") as f:
-        return json.load(f)
+        data = json.load(f)
+    if "model_id" not in data:
+        data["model_id"] = uuid.uuid4().hex
+    # legacy: add rx_num if missing
+    if "rx_num" not in data:
+        data["rx_num"] = 0
+    return data
 
 
 def save_model_mapping(mapping: Dict[str, Any], model_name: str) -> None:
     MODELS_DIR.mkdir(parents=True, exist_ok=True)
+    # Ensure required identity fields exist before save
+    if "model_id" not in mapping:
+        mapping["model_id"] = uuid.uuid4().hex
+    if "rx_num" not in mapping:
+        mapping["rx_num"] = 0
+    if "model_index" not in mapping:
+        # Leave at 0; allocation happens on creation flow
+        mapping["model_index"] = 0
     with open(MODELS_DIR / f"{model_name}.json", "w") as f:
         json.dump(mapping, f, indent=2)
     print(f"Saved model to {MODELS_DIR / (model_name + '.json')}")
@@ -65,6 +79,40 @@ def print_available_controls(stick_mapping: Dict[str, Any]) -> None:
 
 def print_current_model(model_mapping: Dict[str, Any]) -> None:
     print(f"\nModel: {model_mapping.get('name', 'Unnamed')}")
+    print(
+        f"ID: {model_mapping.get('model_id','?')}  RX Slot: {model_mapping.get('rx_num','?')}  Index: {model_mapping.get('model_index','?')}"
+    )
+    # Early exit if no channels have been mapped yet
+    if not model_mapping.get("channels"):
+        print("\nNo channels mapped yet.")
+        return
+    print("\nChannel mapping:")
+    print("-" * 90)
+    print(f"{'Channel':<10} {'Device':<28} {'Path':<30} {'Control':<15}")
+    print("-" * 90)
+    for channel, mapping in sorted(
+        model_mapping["channels"].items(), key=lambda x: int(x[0])
+    ):
+        print(
+            f"{channel:<10} {mapping.get('device_name','')[:28]:<28} {mapping.get('device_path','')[:30]:<30} {mapping.get('control_name','')[:15]:<15}"
+        )
+
+
+def allocate_model_index(existing_models: list[str]) -> int:
+    used = set()
+    for m in existing_models:
+        path = MODELS_DIR / f"{m}.json"
+        try:
+            with open(path, "r") as f:
+                data = json.load(f)
+            if "model_index" in data:
+                used.add(int(data["model_index"]))
+        except Exception:
+            continue
+    idx = 1
+    while idx in used:
+        idx += 1
+    return idx
     if not model_mapping["channels"]:
         print("\nNo channels mapped yet.")
         return
@@ -117,6 +165,23 @@ def select_or_create_model() -> Optional[str]:
             print("Invalid index")
 
 
+def allocate_rx_num(existing_models: list[str]) -> int:
+    used = set()
+    for m in existing_models:
+        path = MODELS_DIR / f"{m}.json"
+        try:
+            with open(path, "r") as f:
+                data = json.load(f)
+            if "rx_num" in data:
+                used.add(int(data["rx_num"]))
+        except Exception:
+            continue
+    for i in range(16):
+        if i not in used:
+            return i
+    return 0  # fallback
+
+
 def create_mapping() -> None:
     stick_mapping = load_stick_mapping()
     if not stick_mapping:
@@ -126,11 +191,17 @@ def create_mapping() -> None:
         print("Exiting...")
         return
     model_mapping = load_existing_model(model_name)
+    # Assign rx_num for new model (no channels yet and default rx_num 0) if user wants unique slot
+    models_list = get_available_models()
+    if "rx_num" not in model_mapping or model_mapping.get("channels") == {}:
+        model_mapping["rx_num"] = allocate_rx_num(models_list)
+    if "model_index" not in model_mapping:
+        model_mapping["model_index"] = allocate_model_index(models_list)
     while True:
         print("\nModel Mapping Configuration\n" + "=" * 60)
         print_current_model(model_mapping)
         print(
-            "\nOptions:\n1. Show controls\n2. Map channel\n3. Remove channel\n4. Save & exit\n5. Exit without saving"
+            "\nOptions:\n1. Show controls\n2. Map channel\n3. Remove channel\n4. Edit RX slot\n5. Save & exit\n6. Exit without saving"
         )
         choice = input("Choose (1-5): ").strip()
         if choice == "1":
@@ -177,9 +248,22 @@ def create_mapping() -> None:
             else:
                 print("Not mapped.")
         elif choice == "4":
+            # Edit RX slot
+            curr = model_mapping.get("rx_num", 0)
+            print(f"Current RX slot: {curr}")
+            new_val = input("Enter new RX slot (0-15) or blank to cancel: ").strip()
+            if new_val:
+                if new_val.isdigit() and 0 <= int(new_val) <= 15:
+                    model_mapping["rx_num"] = int(new_val)
+                    print(
+                        f"RX slot set to {int(new_val)} (remember to re-bind if needed)"
+                    )
+                else:
+                    print("Invalid RX slot")
+        elif choice == "5":
             save_model_mapping(model_mapping, model_name)
             break
-        elif choice == "5":
+        elif choice == "6":
             print("Exiting without saving.")
             break
 

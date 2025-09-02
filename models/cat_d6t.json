@@ -1,5 +1,7 @@
 {
   "name": "cat_d6t",
+  "model_id": "f2f9b6c8c2e44d3d8947e7d6b8c6e5ab",
+  "rx_num": 0,
   "channels": {
     "1": {
       "device_path": "/dev/input/by-path/pci-0000:00:14.0-usb-0:3:1.0-event-joystick",
