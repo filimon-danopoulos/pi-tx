@@ -20,16 +20,7 @@ def run():
 
     if ON_PI:
         try:
-            from .infrastructure.uart_tx import MultiSerialTX, PeriodicChannelSender
-
-            # Show detection reasons if debug requested
-            if os.environ.get("PI_TX_UART_DETECT_DEBUG") == "1":
-                try:
-                    from .infrastructure.uart_tx import _ON_PI_RESULT  # type: ignore
-
-                    print(f"UART detection detail: {_ON_PI_RESULT[1]}")
-                except Exception:
-                    pass
+            from .infrastructure.uart_tx import UartTx, MultiSerialTX
 
             def sample():
                 snap = channel_store.snapshot()
@@ -37,24 +28,22 @@ def run():
                     snap = snap + [0.0] * (16 - len(snap))
                 return snap[:16]
 
-            port = (
-                os.environ.get("UART_PORT") or "/dev/serial0"
-            )  # prefer real port on Pi
-            debug = False  # suppress debug prints on real hardware by default
-            tx = MultiSerialTX(port=port, debug_print=debug)
-            sender = PeriodicChannelSender(tx, sample, rate_hz=50.0)
-            sender.start()
+            port = os.environ.get("UART_PORT") or "/dev/serial0"
+            uart = UartTx(port=port)
+            if not uart.open():
+                raise Exception(f"Failed to open UART port: {port}")
+
+            tx = MultiSerialTX(uart, channel_count=16)
+            tx.set_sampler(sample, normalized=True)  # -1..1 input expected
+            tx.start()
+
             global UART_SENDER
-            UART_SENDER = sender
-            print("UART sender started")
+            UART_SENDER = tx  # store tx for stop
+            print("UART transmission started (internal sampler)")
 
             def _shutdown(*_):
                 try:
-                    sender.stop()
-                except Exception:
-                    pass
-                try:
-                    sender.tx.close()
+                    UART_SENDER.stop()
                 except Exception:
                     pass
 
@@ -90,8 +79,7 @@ def retry_uart_init():
         )
         return False
     try:
-        from .infrastructure.uart_tx import MultiSerialTX, PeriodicChannelSender
-        from .domain.channel_store import channel_store
+        from .infrastructure.uart_tx import UartTx, MultiSerialTX
 
         def sample():
             snap = channel_store.snapshot()
@@ -100,12 +88,17 @@ def retry_uart_init():
             return snap[:16]
 
         port = os.environ.get("UART_PORT") or "/dev/serial0"
-        tx = MultiSerialTX(port=port, debug_print=False)
-        sender = PeriodicChannelSender(tx, sample, rate_hz=50.0)
-        sender.start()
-        UART_SENDER = sender
+        uart = UartTx(port=port)
+        if not uart.open():
+            raise Exception(f"Failed to open UART port: {port}")
+
+        tx = MultiSerialTX(uart, channel_count=16)
+        tx.set_sampler(sample, normalized=True)
+        tx.start()
+
+        UART_SENDER = tx
         UART_INIT_ERROR = None
-        print("UART retry successful")
+        print("UART retry successful (internal sampler)")
         return True
     except Exception as e:
         UART_INIT_ERROR = f"{type(e).__name__}: {e}"
