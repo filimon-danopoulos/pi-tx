@@ -1,9 +1,9 @@
 from __future__ import annotations
-from typing import Mapping, Any, Callable, List, Dict
+
+from typing import Any, Callable, Dict, List, Mapping
 
 
 class ChannelStore:
-
     def __init__(self, size: int = 10):
         self._raw: List[float] = [0.0] * size
         self._derived: List[float] = [0.0] * size
@@ -11,6 +11,10 @@ class ChannelStore:
         self._channel_types: List[str] = ["unipolar"] * size
         self._endpoint_ranges: List[tuple[float, float]] = [(-1.0, 1.0)] * size
         self._differential_mixes: List[tuple[int, int, bool]] = []
+        # aggregate mixes: list of ( [(ch_id, weight), ...], target_index_or_None )
+        # Each mix aggregates abs(source)*weight (weights 0..1) and stores
+        # clamped 0..1 result into target (or first source if no target).
+        self._aggregates: List[tuple[List[tuple[int, float]], int | None]] = []
         self._build_pipeline()
 
     def _build_pipeline(self):
@@ -18,6 +22,7 @@ class ChannelStore:
             self._identity_proc,
             self._reverse_proc,
             self._differential_mix_proc,
+            self._aggregate_proc,
             self._endpoint_proc,
         ]
         self._recompute()
@@ -61,6 +66,38 @@ class ChannelStore:
             out[left_i if inv else right_i] = right_val / scale
         return out
 
+    def _aggregate_proc(self, values: List[float]) -> List[float]:
+        """Compute configured aggregates (formerly sound mixes).
+
+        For each configured sound mix group we:
+          - Take abs of each source channel.
+          - Multiply by its specific weight.
+          - Sum and clamp to 0..1.
+          - Write into target channel or first source if target absent.
+        """
+        if not self._aggregates:
+            return values
+        out = values[:]
+        size = len(out)
+        for chan_weights, target in self._aggregates:
+            s = 0.0
+            for ch_id, weight in chan_weights:
+                idx = ch_id - 1
+                if 0 <= idx < size:
+                    s += abs(out[idx]) * weight
+            if s > 1.0:
+                s = 1.0
+            tgt = (
+                target
+                if target is not None
+                else (chan_weights[0][0] if chan_weights else None)
+            )
+            if tgt is not None:
+                t_idx = tgt - 1
+                if 0 <= t_idx < size:
+                    out[t_idx] = s
+        return out
+
     def configure_processors(self, processors_cfg: Dict[str, Any] | None):
         if not processors_cfg:
             return
@@ -86,6 +123,52 @@ class ChannelStore:
                 except Exception:
                     continue
             self._differential_mixes = parsed
+        # aggregate configuration supports per-channel weights; accepts legacy key 'sound_mix'
+        sm_cfg = processors_cfg.get("aggregate") or processors_cfg.get("sound_mix")
+        if isinstance(sm_cfg, list):
+            sm_parsed: List[tuple[List[tuple[int, float]], int | None]] = []
+            for m in sm_cfg:
+                if not isinstance(m, dict):
+                    continue
+                try:
+                    ch_entries = m.get("channels") or []
+                    top_weight = m.get("value")  # legacy uniform multiplier
+                    chan_weights: List[tuple[int, float]] = []
+                    for entry in ch_entries:
+                        if isinstance(entry, dict):
+                            ch_id = (
+                                entry.get("id")
+                                or entry.get("ch")
+                                or entry.get("channel")
+                            )
+                            if ch_id is None:
+                                continue
+                            cid = int(ch_id)
+                            if cid <= 0:
+                                continue
+                            w = entry.get("value")
+                            weight = float(w) if w is not None else 1.0
+                        else:
+                            cid = int(entry)
+                            if cid <= 0:
+                                continue
+                            weight = (
+                                float(top_weight) if top_weight is not None else 1.0
+                            )
+                        if weight < 0.0:
+                            weight = 0.0
+                        if weight > 1.0:
+                            weight = 1.0
+                        chan_weights.append((cid, weight))
+                    target_raw = m.get("target")
+                    target_idx: int | None = (
+                        int(target_raw) if target_raw is not None else None
+                    )
+                    if chan_weights:
+                        sm_parsed.append((chan_weights, target_idx))
+                except Exception:
+                    continue
+            self._aggregates = sm_parsed
         self._build_pipeline()
 
     def configure_differential_mixes(self, mixes: List[Dict[str, Any]]):
@@ -129,6 +212,8 @@ class ChannelStore:
     def clear_mixes(self):
         self._processors = []
         self._recompute()
+
+    # Note: earlier 'sound_mix_values' accessor removed; aggregate writes into target (or first source).
 
     def _recompute(self):
         cur = self._raw[:]

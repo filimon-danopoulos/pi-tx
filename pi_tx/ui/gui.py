@@ -41,6 +41,8 @@ class ChannelBar(Widget):
             self.bar_color = [0.30, 0.80, 0.40, 1]
         elif self.channel_type == "button":
             self.bar_color = [0.90, 0.25, 0.25, 1]
+        elif self.channel_type == "virtual":
+            self.bar_color = [0.65, 0.45, 0.95, 1]
         else:
             self.bar_color = [0.22, 0.55, 0.95, 1]
 
@@ -76,9 +78,8 @@ class ChannelRow(MDBoxLayout):
         )
         self.channel_number = channel_number
         self.channel_type = channel_type or "unipolar"
-        self.label = MDLabel(
-            text=f"CH_{channel_number}", size_hint_x=None, width=dp(60)
-        )
+        base_label = f"CH_{channel_number}"
+        self.label = MDLabel(text=base_label, size_hint_x=None, width=dp(60))
         self.bar = ChannelBar(self.channel_type, size_hint_x=1)
         self.value_label = MDLabel(
             text="0.00", size_hint_x=None, width=dp(60), halign="right"
@@ -264,9 +265,12 @@ class PiTxApp(MDApp):
             return
         for ch_str in sorted(channels.keys(), key=lambda x: int(x)):
             ch = int(ch_str)
-            ch_type = channels[ch_str].get(
-                "control_type", channels[ch_str].get("type", "unipolar")
-            )
+            ch_info = channels[ch_str]
+            ch_type = ch_info.get("control_type", ch_info.get("type", "unipolar"))
+            # Auto-detect virtual/derived channel: no device path or non-numeric control code
+            ctrl_code = str(ch_info.get("control_code", ""))
+            if (not ch_info.get("device_path")) or (not ctrl_code.isdigit()):
+                ch_type = "virtual"
             row = ChannelRow(ch, ch_type)
             row.update_value(0.0)
             self.channel_rows[ch] = row
@@ -284,8 +288,12 @@ class PiTxApp(MDApp):
         for channel, mapping in channels.items():
             try:
                 channel_id = int(channel)
-                device_path = mapping["device_path"]
-                control_code = int(mapping["control_code"])
+                device_path = mapping.get("device_path")
+                control_code_raw = str(mapping.get("control_code", ""))
+                # Skip virtual/derived channels (no device binding)
+                if not device_path or not control_code_raw.isdigit():
+                    continue
+                control_code = int(control_code_raw)
                 self.input_controller.register_channel_mapping(
                     device_path, control_code, channel_id
                 )

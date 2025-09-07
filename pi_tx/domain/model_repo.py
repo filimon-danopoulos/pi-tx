@@ -1,7 +1,10 @@
 from __future__ import annotations
-import os, json, uuid
+
+import json
+import os
+import uuid
 from dataclasses import dataclass, field
-from typing import Dict, List, Any
+from typing import Any, Dict, List
 
 MODELS_DIR_DEFAULT = "models"
 
@@ -11,7 +14,7 @@ class ChannelConfig:
     channel_id: int
     control_type: str
     device_path: str
-    control_code: int
+    control_code: str  # may be numeric string or symbolic (e.g. 'virtual')
 
 
 @dataclass
@@ -65,13 +68,17 @@ class ModelRepository:
         for key, cfg in raw.items():
             try:
                 ch_id = int(key)
+                ctrl_code_raw = cfg.get("control_code")
+                if ctrl_code_raw is None:
+                    raise ValueError("missing control_code")
+                # Accept either numeric or string tokens; store as string
                 parsed[ch_id] = ChannelConfig(
                     channel_id=ch_id,
                     control_type=cfg.get("control_type")
                     or cfg.get("type")
                     or "unipolar",
-                    device_path=cfg["device_path"],
-                    control_code=int(cfg["control_code"]),
+                    device_path=cfg.get("device_path", ""),
+                    control_code=str(ctrl_code_raw),
                 )
             except Exception as e:
                 print(f"ModelRepository: skipping channel {key}: {e}")
