@@ -14,6 +14,7 @@ from ..input.controls import InputController
 
 # LAST_MODEL_FILE handling moved into ModelManager; no direct import needed here
 from .services.model_manager import ModelManager, Model
+from .services.model_selection import ModelSelectionController
 from .components.channel_panel import ChannelPanel
 
 
@@ -30,6 +31,9 @@ class PiTxApp(MDApp):
         self.channel_panel: ChannelPanel | None = None
         self.available_models: list[str] = []
         self._model_manager = ModelManager()
+        self._model_selector = ModelSelectionController(
+            self._model_manager, self.input_controller, None
+        )
         self._current_model: Model | None = None
         self.register_event_type("on_model_selected")
 
@@ -49,6 +53,8 @@ class PiTxApp(MDApp):
         self._toolbar = toolbar
         scroll = ScrollView()
         self.channel_panel = ChannelPanel()
+        # inform selector about panel now that it's created
+        self._model_selector.set_channel_panel(self.channel_panel)
         scroll.add_widget(self.channel_panel)
         root.add_widget(scroll)
         # Schedule tasks after first frame so layout exists
@@ -121,60 +127,15 @@ class PiTxApp(MDApp):
             self.select_model(model_name)
 
     def select_model(self, model_name: str):
-        model, mapping = self._model_manager.load_and_apply(model_name)
+        model, mapping = self._model_selector.apply_selection(model_name)
         self._current_model = model
         self.selected_model = model.name
         self.model_mapping = {"name": model.name, "channels": mapping}
         if hasattr(self, "_toolbar") and self._toolbar:
             self._toolbar.title = f"pi-tx: {model_name}"
-        self._rebuild_channel_rows()
-        self._apply_model_mapping()
         self.dispatch("on_model_selected", model_name)
-        self._model_manager.persist_last(model_name)
 
-        # Apply rx_num to active UART transmitter (if running)
-        try:
-            from .. import app as app_mod
-
-            tx = getattr(app_mod, "UART_SENDER", None)
-            if tx:
-                if hasattr(tx, "set_rx_num"):
-                    tx.set_rx_num(getattr(model, "rx_num", 0))
-                if hasattr(tx, "set_model_id"):
-                    tx.set_model_id(getattr(model, "model_id", None))
-        except Exception as e:
-            print(f"Warning: could not apply rx_num to transmitter: {e}")
-
-    def _rebuild_channel_rows(self):
-        if not self.channel_panel:
-            return
-        self.channel_panel.rebuild(self.model_mapping.get("channels", {}))
-
-    def _apply_model_mapping(self):
-        if not self.input_controller:
-            return
-        # Clear previous value cache before re-mapping channels
-        self.input_controller.clear_values()
-        channels = self.model_mapping.get("channels", {})
-        if self.channel_panel:
-            for ch, row in self.channel_panel.rows.items():
-                if str(ch) not in channels:
-                    row.update_value(0.0)
-        for channel, mapping in channels.items():
-            try:
-                channel_id = int(channel)
-                device_path = mapping.get("device_path")
-                control_code_raw = str(mapping.get("control_code", ""))
-                # Skip virtual/derived channels (no device binding)
-                if not device_path or not control_code_raw.isdigit():
-                    continue
-                control_code = int(control_code_raw)
-                self.input_controller.register_channel_mapping(
-                    device_path, control_code, channel_id
-                )
-            except Exception as e:
-                print(f"Failed to register mapping for channel {channel}: {e}")
-        self.input_controller.start()
+    # Legacy methods kept minimal or removed; selection logic moved to controller
 
     def _process_input_events(self, *_):
         if not self.input_controller:
