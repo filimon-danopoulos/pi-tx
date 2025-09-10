@@ -2,11 +2,18 @@ from __future__ import annotations
 from typing import Dict
 from kivy.clock import Clock
 from kivy.properties import StringProperty, DictProperty
-from kivy.uix.scrollview import ScrollView
+from kivy.uix.scrollview import ScrollView  # legacy import (can remove later)
 from kivymd.app import MDApp
 from kivymd.uix.boxlayout import MDBoxLayout
 from kivymd.uix.menu import MDDropdownMenu
 from kivymd.uix.toolbar import MDTopAppBar as MDToolbar
+from kivymd.uix.button import MDIconButton
+from kivy.metrics import dp
+from kivymd.uix.bottomnavigation import (
+    MDBottomNavigation,
+    MDBottomNavigationItem,
+)  # legacy (now in component)
+from kivymd.uix.label import MDLabel  # still used for inline placeholders
 from kivymd.uix.list import OneLineListItem
 
 from ..domain.channel_store import channel_store
@@ -16,7 +23,8 @@ from ..input.controls import InputController
 from .services.model_manager import ModelManager, Model
 from .services.model_selection import ModelSelectionController
 from .services.input_event_pump import InputEventPump
-from .components.channel_panel import ChannelPanel
+from .components.channel_panel import ChannelPanel  # still referenced externally
+from .components.main_navigation import MainNavigation
 
 
 """GUI main module (PiTxApp) composed from smaller component modules."""
@@ -43,23 +51,36 @@ class PiTxApp(MDApp):
         pass
 
     def build(self):
-        self.theme_cls.primary_palette = "Blue"
+        self.theme_cls.theme_style = "Dark"
+        self.theme_cls.primary_palette = "Teal"
+        self.theme_cls.accent_palette = "LightGreen"
         root = MDBoxLayout(orientation="vertical")
+
+        # Top toolbar
         toolbar = MDToolbar(title="pi-tx")
         toolbar.right_action_items = [
             ["folder", lambda x: self.open_model_menu(x)],
             ["refresh", lambda x: self.refresh_models()],
-            ["wifi", lambda x: self.trigger_bind()],  # trigger bind window
         ]
         root.add_widget(toolbar)
         self._toolbar = toolbar
-        scroll = ScrollView()
-        self.channel_panel = ChannelPanel()
-        # inform selector about panel now that it's created
-        self._model_selector.set_channel_panel(self.channel_panel)
-        scroll.add_widget(self.channel_panel)
-        root.add_widget(scroll)
-        # Schedule tasks after first frame so layout exists
+
+        # Bottom navigation component
+        try:  # pragma: no cover
+            nav = MainNavigation()
+            # expose references for existing logic
+            self.channels_view = nav.channels_view
+            self.channel_panel = nav.channel_panel
+            self.model_settings_view = nav.model_settings_view
+            self.system_settings_view = nav.system_settings_view
+            self._model_selector.set_channel_panel(self.channel_panel)
+            root.add_widget(nav)
+            self._bottom_nav = nav
+        except Exception as e:  # pragma: no cover
+            print(f"Navigation init failed: {e}")
+            self._bottom_nav = None
+
+        # Schedule periodic tasks
         Clock.schedule_once(lambda *_: self.refresh_models(), 0)
         Clock.schedule_interval(self._input_pump.tick, 1.0 / 100.0)
         Clock.schedule_interval(self._poll_store_and_refresh, 1.0 / 30.0)
@@ -94,10 +115,27 @@ class PiTxApp(MDApp):
         except Exception as e:
             print(f"Bind trigger failed: {e}")
 
+    # Removed bind tab logic; bind now exposed via model menu
+
     def open_model_menu(self, caller_widget=None):
         if not getattr(self, "available_models", None):
             self.refresh_models()
         items = []
+
+        # Add bind option at the top of the menu
+        def _bind_and_close():
+            if getattr(self, "_model_menu", None):
+                self._model_menu.dismiss()
+            self.trigger_bind()
+
+        items.append(
+            {
+                "viewclass": "OneLineListItem",
+                "text": "Bind (2s)",
+                "on_release": _bind_and_close,
+            }
+        )
+
         for model_name in self.available_models:
 
             def _cb(m=model_name):
@@ -106,14 +144,14 @@ class PiTxApp(MDApp):
             items.append(
                 {"viewclass": "OneLineListItem", "text": model_name, "on_release": _cb}
             )
-        if not items:
-            items = [
+        if len(items) == 1:  # only bind present, no models available
+            items.append(
                 {
                     "viewclass": "OneLineListItem",
                     "text": "No models found",
                     "on_release": lambda: None,
                 }
-            ]
+            )
         if hasattr(self, "_model_menu") and self._model_menu:
             self._model_menu.dismiss()
         from kivymd.uix.menu import MDDropdownMenu
@@ -135,6 +173,8 @@ class PiTxApp(MDApp):
         self.model_mapping = {"name": model.name, "channels": mapping}
         if hasattr(self, "_toolbar") and self._toolbar:
             self._toolbar.title = f"pi-tx: {model_name}"
+        if hasattr(self, "model_settings_view") and self.model_settings_view:
+            self.model_settings_view.set_model(model_name)
         self.dispatch("on_model_selected", model_name)
 
     # Legacy methods kept minimal or removed; selection logic moved to controller
@@ -143,7 +183,7 @@ class PiTxApp(MDApp):
 
     def _poll_store_and_refresh(self, *_):
         snap = channel_store.snapshot()
-        if self.channel_panel:
+        if hasattr(self, "channels_view") and self.channel_panel:
             self.channel_panel.update_values(snap)
 
     def _autoload_last_model(self):
