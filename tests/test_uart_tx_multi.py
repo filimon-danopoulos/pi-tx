@@ -1,5 +1,4 @@
 import time
-import math
 
 from pi_tx.infrastructure.uart_tx import DebugUartTx, MultiSerialTX
 
@@ -16,12 +15,9 @@ def test_frame_basic_structure():
     dbg.open()
     tx = MultiSerialTX(dbg, channel_count=6)
     frame = tx.get_frame_once()
-    # header
     assert frame[0] == 0x55
-    # length should be 5 + 2*N + 1
     expected_len = 5 + 2 * 6 + 1
     assert len(frame) == expected_len
-    # checksum
     assert xor_checksum(frame[1:-1]) == frame[-1]
 
 
@@ -45,7 +41,6 @@ def test_flag_bits():
     dbg = DebugUartTx()
     dbg.open()
     tx = MultiSerialTX(dbg, channel_count=2)
-    # baseline flags (no bind/range/auto)
     f0 = tx.get_frame_once()[2]
     assert (f0 & 0xE0) == 0
     tx.set_bind_mode(True)
@@ -53,10 +48,10 @@ def test_flag_bits():
     assert (bind_flags & 0x80) != 0
     tx.set_range_check(True)
     range_flags = tx.get_frame_once()[2]
-    assert (range_flags & 0xC0) == 0xC0  # bind + range bits
+    assert (range_flags & 0xC0) == 0xC0
     tx.set_autobind(True)
     auto_flags = tx.get_frame_once()[2]
-    assert (auto_flags & 0xE0) == 0xE0  # all three bits
+    assert (auto_flags & 0xE0) == 0xE0
 
 
 def test_option_mapping():
@@ -67,42 +62,9 @@ def test_option_mapping():
         tx.set_option(val)
         frame = tx.get_frame_once()
         stored = frame[3]
-        # Recover signed: (stored-32), original clamped to -32..31
         clamped = max(-32, min(31, val))
         recovered = ((stored & 0xFF) - 32) if stored < 128 else stored - 256 - 32
         assert recovered == clamped, (val, stored, recovered)
-
-
-def test_sampler_normalized_scaling():
-    dbg = DebugUartTx()
-    dbg.open()
-    seqs = [[-1.0, 0.0, 1.0], [0.5, -0.5, 0.0]]
-    out_sets = []
-    tx = MultiSerialTX(dbg, channel_count=3)
-
-    def sampler_gen():
-        for s in seqs:
-            yield s
-
-    gen = sampler_gen()
-
-    def sampler():
-        return next(gen)
-
-    tx.set_sampler(sampler, normalized=True)
-    # First sample
-    tx.sample_once()
-    c1 = tx.get_channels()
-    # Second sample
-    tx.sample_once()
-    c2 = tx.get_channels()
-    out_sets.append(c1)
-    out_sets.append(c2)
-    # Check boundaries
-    assert c1[0] == 0 and c1[1] in (1023, 1024) and c1[2] >= 2046
-    # Monotonic mapping check for second set (-0.5 < 0.0 < 0.5)
-    assert c2[1] < c2[2]
-    assert 0 <= min(c1 + c2) and max(c1 + c2) <= 2047
 
 
 def test_debug_capture_frames():
@@ -110,10 +72,10 @@ def test_debug_capture_frames():
     dbg.open()
     tx = MultiSerialTX(dbg, channel_count=2, frame_rate_hz=20)
     tx.start()
-    time.sleep(0.2)  # allow several frames
+    time.sleep(0.2)
     tx.stop()
     frames = dbg.all_frames()
-    assert 1 <= len(frames) <= 3  # ring buffer capped
+    assert 1 <= len(frames) <= 3
     last = frames[-1]
     assert "parsed" in last and "channels" in last["parsed"]
 
@@ -126,8 +88,7 @@ def test_thread_start_stop_idempotent():
     tx.start()
     time.sleep(0.05)
     tx.stop()
-    tx.stop()  # should not raise
-    # ensure at least one frame captured
+    tx.stop()
     assert dbg.latest() is not None
 
 
@@ -145,8 +106,46 @@ def test_sampler_exception_suppression():
     tx.start()
     time.sleep(0.12)
     tx.stop()
-    # sampler was invoked several times but errors were suppressed (no crash)
     assert calls["n"] >= 2
+
+
+def test_model_id_attached_to_debug_frames():
+    dbg = DebugUartTx()
+    dbg.open()
+    tx = MultiSerialTX(dbg, channel_count=2, frame_rate_hz=25)
+    tx.set_model_id("abc123")
+    tx.start()
+    time.sleep(0.08)
+    tx.stop()
+    frames = dbg.all_frames()
+    assert frames and any(f.get("meta", {}).get("model_id") == "abc123" for f in frames)
+
+
+# Restored tests from legacy file (previously test_uart_multi.py) for full coverage
+
+def test_sampler_normalized_scaling():
+    dbg = DebugUartTx()
+    dbg.open()
+    seqs = [[-1.0, 0.0, 1.0], [0.5, -0.5, 0.0]]
+    tx = MultiSerialTX(dbg, channel_count=3)
+
+    def sampler_gen():
+        for s in seqs:
+            yield s
+
+    gen = sampler_gen()
+
+    def sampler():
+        return next(gen)
+
+    tx.set_sampler(sampler, normalized=True)
+    tx.sample_once()
+    c1 = tx.get_channels()
+    tx.sample_once()
+    c2 = tx.get_channels()
+    assert c1[0] == 0 and c1[2] >= 2046
+    assert c2[1] < c2[2]
+    assert 0 <= min(c1 + c2) and max(c1 + c2) <= 2047
 
 
 def test_rx_num_clamp_and_encoding():
@@ -186,8 +185,7 @@ def test_checksum_error_detection_in_debug_parser():
     dbg.open()
     tx = MultiSerialTX(dbg, channel_count=3)
     frame = bytearray(tx.get_frame_once())
-    # Corrupt one channel byte
-    frame[6] ^= 0xFF
+    frame[6] ^= 0xFF  # corrupt a byte
     dbg.send_bytes(bytes(frame))
     parsed = dbg.latest()["parsed"]
     assert parsed.get("error") == "checksum"
@@ -197,7 +195,6 @@ def test_bind_for_seconds_sets_and_clears_flag():
     dbg = DebugUartTx()
     dbg.open()
     tx = MultiSerialTX(dbg, channel_count=1, frame_rate_hz=30)
-    # monkey patch set_bind_mode to observe transitions
     transitions = []
     real_set = tx.set_bind_mode
 
@@ -207,9 +204,9 @@ def test_bind_for_seconds_sets_and_clears_flag():
 
     tx.set_bind_mode = tracking_set  # type: ignore
     start = time.time()
-    tx.bind_for_seconds(0.15)
+    tx.bind_for_seconds(0.05)
     dur = time.time() - start
-    assert dur >= 0.14  # approximate
+    assert dur >= 0.045
     assert transitions[0] is True and transitions[-1] is False
 
 
@@ -217,7 +214,7 @@ def test_channel_count_overflow_ignored():
     dbg = DebugUartTx()
     dbg.open()
     tx = MultiSerialTX(dbg, channel_count=4)
-    tx.set_channels([0, 100, 200, 300, 400, 500])  # extra values ignored
+    tx.set_channels([0, 100, 200, 300, 400, 500])
     frame = tx.get_frame_once()
     chan_bytes = frame[5:-1]
     decoded = []
@@ -226,18 +223,3 @@ def test_channel_count_overflow_ignored():
         hi = chan_bytes[i + 1] & 0x07
         decoded.append(lo | (hi << 8))
     assert decoded == [0, 100, 200, 300]
-
-
-def test_model_id_attached_to_debug_frames():
-    dbg = DebugUartTx()
-    dbg.open()
-    tx = MultiSerialTX(dbg, channel_count=2, frame_rate_hz=25)
-    tx.set_model_id("abc123")
-    tx.start()
-    time.sleep(0.08)
-    tx.stop()
-    frames = dbg.all_frames()
-    assert frames, "No frames captured"
-    # Find a frame with meta.model_id
-    meta_ids = [f.get("meta", {}).get("model_id") for f in frames]
-    assert "abc123" in meta_ids

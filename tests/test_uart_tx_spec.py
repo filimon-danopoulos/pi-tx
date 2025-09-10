@@ -2,7 +2,6 @@ import sys, types, importlib, time
 
 
 def test_uart_serial_config(monkeypatch):
-    # Prepare dummy serial module to intercept Serial creation
     called = {}
 
     class DummySerial:
@@ -33,10 +32,7 @@ def test_uart_serial_config(monkeypatch):
 
     serial_mod = types.SimpleNamespace(Serial=DummySerial)
     monkeypatch.setitem(sys.modules, "serial", serial_mod)
-
-    # Reload uart module so it picks up dummy serial
     import pi_tx.infrastructure.uart_tx as uart_tx
-
     importlib.reload(uart_tx)
 
     u = uart_tx.UartTx(port="TESTPORT")
@@ -54,7 +50,7 @@ def test_channel_value_clamp_and_encoding():
     dbg = DebugUartTx()
     dbg.open()
     tx = MultiSerialTX(dbg, channel_count=3)
-    tx.set_channels([-100, 1024, 99999])  # extremes + mid
+    tx.set_channels([-100, 1024, 99999])
     frame = tx.get_frame_once()
     chan_bytes = frame[5:-1]
     decoded = []
@@ -77,15 +73,11 @@ def test_frame_rate_approximation():
     time.sleep(dur)
     tx.stop()
     frames = dbg.all_frames()
-    # Expect at least 50% of ideal frames (allow for scheduling jitter)
     ideal = target_hz * dur
-    assert (
-        len(frames) >= ideal * 0.5
-    ), f"Too few frames: got {len(frames)} expected >= {ideal*0.5}"
+    assert len(frames) >= ideal * 0.5
 
 
 def test_frame_timing_jitter():
-    """Capture timestamps and estimate jitter (std dev) stays reasonable (<6ms)."""
     from pi_tx.infrastructure.uart_tx import DebugUartTx, MultiSerialTX
     import statistics
 
@@ -98,13 +90,11 @@ def test_frame_timing_jitter():
     tx.stop()
     frames = dbg.all_frames()
     ts = [f["ts"] for f in frames]
-    # Need at least several intervals
     assert len(ts) > 5
     intervals = [b - a for a, b in zip(ts, ts[1:])]
     mean = sum(intervals) / len(intervals)
-    # Mean should be close to target period (within 20%)
     expected = 1.0 / target
     assert abs(mean - expected) < expected * 0.2
     if len(intervals) > 2:
         stdev = statistics.pstdev(intervals)
-        assert stdev < 0.006  # 6ms std dev upper bound on typical Linux scheduling
+        assert stdev < 0.006
