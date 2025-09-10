@@ -49,7 +49,9 @@ class ModelSelectionController:
                         if not device_path or not code_raw.isdigit():  # virtual channel
                             continue
                         control_code = int(code_raw)
-                        self._input.register_channel_mapping(device_path, control_code, ch_id)
+                        self._input.register_channel_mapping(
+                            device_path, control_code, ch_id
+                        )
                     except Exception as e:  # pragma: no cover (defensive per mapping)
                         print(f"Failed to register mapping for channel {channel}: {e}")
                 self._input.start()
@@ -78,6 +80,7 @@ class ModelSelectionController:
     def _default_uart_resolver():  # pragma: no cover
         try:
             from ... import app as app_mod  # local import to avoid cyclic UI deps
+
             return getattr(app_mod, "UART_SENDER", None)
         except Exception:
             return None

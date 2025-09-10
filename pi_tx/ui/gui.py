@@ -15,6 +15,7 @@ from ..input.controls import InputController
 # LAST_MODEL_FILE handling moved into ModelManager; no direct import needed here
 from .services.model_manager import ModelManager, Model
 from .services.model_selection import ModelSelectionController
+from .services.input_event_pump import InputEventPump
 from .components.channel_panel import ChannelPanel
 
 
@@ -35,6 +36,7 @@ class PiTxApp(MDApp):
             self._model_manager, self.input_controller, None
         )
         self._current_model: Model | None = None
+        self._input_pump = InputEventPump(self.input_controller, channel_store.set_many)
         self.register_event_type("on_model_selected")
 
     def on_model_selected(self, model_name: str):
@@ -59,7 +61,7 @@ class PiTxApp(MDApp):
         root.add_widget(scroll)
         # Schedule tasks after first frame so layout exists
         Clock.schedule_once(lambda *_: self.refresh_models(), 0)
-        Clock.schedule_interval(self._process_input_events, 1.0 / 100.0)
+        Clock.schedule_interval(self._input_pump.tick, 1.0 / 100.0)
         Clock.schedule_interval(self._poll_store_and_refresh, 1.0 / 30.0)
         return root
 
@@ -137,17 +139,7 @@ class PiTxApp(MDApp):
 
     # Legacy methods kept minimal or removed; selection logic moved to controller
 
-    def _process_input_events(self, *_):
-        if not self.input_controller:
-            return
-        # Drain queue; keep only last value per channel for this frame
-        last: Dict[int, float] = {}
-        for ch_id, value in self.input_controller.pop_events():
-            last[ch_id] = value
-        if not last:
-            return
-        # Batch update store; UI will poll separately
-        channel_store.set_many(last)
+    # Input processing now handled by InputEventPump (scheduled in build)
 
     def _poll_store_and_refresh(self, *_):
         snap = channel_store.snapshot()
