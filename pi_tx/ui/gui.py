@@ -279,8 +279,8 @@ class PiTxApp(MDApp):
     def _apply_model_mapping(self):
         if not self.input_controller:
             return
-        self.input_controller.clear_callbacks()
-        self.input_controller.enable_queue_mode()
+        # Clear previous value cache before re-mapping channels
+        self.input_controller.clear_values()
         channels = self.model_mapping.get("channels", {})
         for ch, row in self.channel_rows.items():
             if str(ch) not in channels:
@@ -298,7 +298,7 @@ class PiTxApp(MDApp):
                     device_path, control_code, channel_id
                 )
             except Exception as e:
-                print(f"Failed to register callback for channel {channel}: {e}")
+                print(f"Failed to register mapping for channel {channel}: {e}")
         self.input_controller.start()
 
     def _process_input_events(self, *_):

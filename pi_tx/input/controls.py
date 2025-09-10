@@ -1,12 +1,17 @@
 from __future__ import annotations
-import threading, time, select, json, os
+import threading, select, json, os
 from queue import SimpleQueue
 from datetime import datetime
-from evdev import InputDevice, ecodes, list_devices
+from evdev import InputDevice, ecodes
 from pathlib import Path
 
 
 class InputController:
+    """Reads mapped evdev devices and publishes normalized channel values via a queue.
+
+    Only queue-based consumption is supported (no per-event callback registration).
+    """
+
     def __init__(self, debug=False, mapping_file: str | None = None):
         if mapping_file is None:
             mapping_file = str(
@@ -15,14 +20,11 @@ class InputController:
         self._stop_event = threading.Event()
         self._thread = None
         self._devices: list[InputDevice] = []
-        self._callbacks: dict[str, dict[int, callable]] = {}
         self._debug = debug
         self._last_values: dict[str, dict[int, float]] = {}
-        # Latching button (formerly faux-switch) support state containers
         self._latch_states: dict[str, dict[int, int]] = {}
         self._last_key_raw: dict[str, dict[int, int]] = {}
         self._event_queue: SimpleQueue[tuple[int, float]] = SimpleQueue()
-        self._callback_mode = True
         self._channel_map: dict[str, dict[int, int]] = {}
         try:
             with open(mapping_file, "r") as f:
@@ -30,11 +32,9 @@ class InputController:
         except FileNotFoundError:
             print(f"Warning: Mapping file {mapping_file} not found")
             self._mappings = {}
-        # Keep original device path keys (likely by-path / by-id) prior to alias expansion
         self._mapping_device_keys: list[str] = [
             k for k in self._mappings.keys() if k.startswith("/dev/input/")
         ]
-        # Also index mappings by the real (eventX) device path so runtime dev.path matches regardless of key type
         added = 0
         for k in list(self._mapping_device_keys):
             try:
@@ -66,11 +66,10 @@ class InputController:
         return True
 
     def prime_values(self):
-        """One-time priming of mapped ABS axes using current hardware state.
+        """Prime mapped ABS axes using current hardware state.
 
-        Re-uses _normalize_value, stores baseline in _last_values to avoid duplicate
-        first events, and dispatches via callback or queue depending on mode.
-        Safe to call multiple times; later calls will just update baselines.
+        Stores baseline in _last_values to avoid duplicate first events and enqueues
+        initial values for mapped channels. Safe to call multiple times.
         """
         try:
             for dev in self._devices:
@@ -90,18 +89,8 @@ class InputController:
                         dev.path, ecodes.EV_ABS, code, abs_info.value
                     )
                     self._last_values.setdefault(dev.path, {})[code] = norm
-                    if self._callback_mode:
-                        cb = self._callbacks.get(dev.path, {}).get(code)
-                        if cb:
-                            try:
-                                cb(norm)
-                            except Exception as e:
-                                print(
-                                    f"Error in priming callback {dev.path} {code}: {e}"
-                                )
-                    else:
-                        if ch_id is not None:
-                            self.enqueue_channel_value(ch_id, norm)
+                    if ch_id is not None:
+                        self.enqueue_channel_value(ch_id, norm)
                     if self._debug:
                         print(f"Primed ABS dev={dev.path} code={code} norm={norm:.3f}")
         except Exception as e:
@@ -122,18 +111,9 @@ class InputController:
         self._devices.clear()
         return True
 
-    def register_callback(self, device_path: str, event_code: int, callback) -> None:
-        if device_path not in self._callbacks:
-            self._callbacks[device_path] = {}
-        self._callbacks[device_path][event_code] = callback
-
-    def clear_callbacks(self) -> None:
-        self._callbacks.clear()
+    def clear_values(self) -> None:
+        """Clear cached last values (e.g., before reapplying a model)."""
         self._last_values.clear()
-
-    # Queue mode
-    def enable_queue_mode(self):
-        self._callback_mode = False
 
     def enqueue_channel_value(self, channel_id: int, value: float):
         self._event_queue.put((channel_id, value))
@@ -261,19 +241,9 @@ class InputController:
                         last = self._last_values[dev.path].get(ev.code)
                         if last != norm:
                             self._last_values[dev.path][ev.code] = norm
-                            if self._callback_mode:
-                                cb = self._callbacks.get(dev.path, {}).get(ev.code)
-                                if cb:
-                                    try:
-                                        cb(norm)
-                                    except Exception as e:
-                                        print(
-                                            f"Error in callback {dev.path} {ev.code}: {e}"
-                                        )
-                            else:
-                                ch_id = self._channel_map.get(dev.path, {}).get(ev.code)
-                                if ch_id is not None:
-                                    self.enqueue_channel_value(ch_id, norm)
+                            ch_id = self._channel_map.get(dev.path, {}).get(ev.code)
+                            if ch_id is not None:
+                                self.enqueue_channel_value(ch_id, norm)
                         if self._debug:
                             status = "changed" if last != norm else "filtered"
                             print(
