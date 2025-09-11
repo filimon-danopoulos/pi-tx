@@ -22,14 +22,7 @@ class ChannelBar(Widget):
         )
 
     def _update_bar_color(self):
-        if self.channel_type == "bipolar":
-            self.bar_color = [0.30, 0.80, 0.40, 1]
-        elif self.channel_type == "button":
-            self.bar_color = [0.90, 0.25, 0.25, 1]
-        elif self.channel_type == "virtual":
-            self.bar_color = [0.65, 0.45, 0.95, 1]
-        else:
-            self.bar_color = [0.22, 0.55, 0.95, 1]
+        self.bar_color = [0.22, 0.55, 0.95, 1]
 
     def _redraw(self):
         self.canvas.clear()

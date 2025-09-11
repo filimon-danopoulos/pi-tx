@@ -10,7 +10,7 @@ class ChannelRow(MDBoxLayout):
         super().__init__(
             orientation="horizontal",
             size_hint_y=None,
-            height=dp(42),
+            height=dp(32),
             padding=(dp(8), 0, dp(8), 0),
             spacing=dp(8),
             **kw,
