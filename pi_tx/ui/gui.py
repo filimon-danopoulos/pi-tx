@@ -6,7 +6,7 @@ from kivy.uix.scrollview import ScrollView  # legacy import (can remove later)
 from kivymd.app import MDApp
 from kivymd.uix.boxlayout import MDBoxLayout
 from kivymd.uix.menu import MDDropdownMenu
-from kivymd.uix.toolbar import MDTopAppBar as MDToolbar
+from .components.top_bar import TopBar
 from kivymd.uix.button import MDIconButton
 from kivy.metrics import dp
 from kivymd.uix.bottomnavigation import (
@@ -55,12 +55,14 @@ class PiTxApp(MDApp):
         self.theme_cls.primary_palette = "Teal"
         root = MDBoxLayout(orientation="vertical")
 
-        # Top toolbar
-        toolbar = MDToolbar(title="pi-tx")
-        toolbar.right_action_items = [
-            ["folder", lambda x: self.open_model_menu(x)],
-            ["refresh", lambda x: self.refresh_models()],
-        ]
+        # Top toolbar (now in its own component)
+        toolbar = TopBar(
+            title="pi-tx",
+            right_action_items=[
+                ["folder", lambda x: self.open_model_menu(x)],
+                ["refresh", lambda x: self.refresh_models()],
+            ],
+        )
         root.add_widget(toolbar)
         self._toolbar = toolbar
 

@@ -46,13 +46,6 @@
       "control_type": "latching-button"
     },
     "7": {
-      "device_path": "/dev/input/by-path/pci-0000:00:14.0-usb-0:2:1.0-event-joystick",
-      "device_name": "Thrustmaster T.16000M",
-      "control_code": "6",
-      "control_name": "throttle",
-      "control_type": "unipolar"
-    },
-    "8": {
       "device_path": "",
       "device_name": "virtual",
       "control_code": "virtual",
@@ -83,7 +76,7 @@
             {"id": 3, "value": 0.4},
             {"id": 4, "value": 0.4}
           ],
-          "target": 8
+          "target": 7
         }
       ]
   }

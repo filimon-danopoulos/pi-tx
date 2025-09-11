@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from kivymd.uix.bottomnavigation import MDBottomNavigation, MDBottomNavigationItem
 
-from .channels_view import ChannelsView
-from .model_settings import ModelSettingsView
-from .system_settings import SystemSettingsView
+from ..views.channels import ChannelsView
+from ..views.model_settings import ModelSettingsView
+from ..views.system_settings import SystemSettingsView
 
 
 class MainNavigation(MDBottomNavigation):
