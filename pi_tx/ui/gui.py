@@ -4,7 +4,6 @@ from kivy.clock import Clock
 from kivy.properties import StringProperty, DictProperty
 from kivymd.app import MDApp
 from kivymd.uix.boxlayout import MDBoxLayout
-from kivymd.uix.navigationdrawer import MDNavigationLayout
 from kivymd.uix.screen import MDScreen
 from kivy.uix.screenmanager import ScreenManager
 
@@ -15,8 +14,6 @@ from .services.model_selection import ModelSelectionController
 from .services.input_event_pump import InputEventPump
 from .components.channel_panel import ChannelPanel
 from .components.main_navigation import MainNavigation
-from .components.top_bar import TopBar
-from .components.left_drawer import LeftDrawer
 
 
 class PiTxApp(MDApp):
@@ -34,6 +31,7 @@ class PiTxApp(MDApp):
         )
         self._current_model: Model | None = None
         self._input_pump = InputEventPump(self.input_controller, channel_store.set_many)
+        self._selecting_model = False  # Flag to prevent recursion
         self.register_event_type("on_model_selected")
 
     def on_model_selected(self, model_name: str):
@@ -42,19 +40,9 @@ class PiTxApp(MDApp):
     def build(self):
         self.theme_cls.theme_style = "Dark"
         self.theme_cls.primary_palette = "Teal"
-        nav_layout = MDNavigationLayout()
         screen_manager = ScreenManager()
         screen = MDScreen()
         content_root = MDBoxLayout(orientation="vertical")
-
-        toolbar = TopBar(
-            title="pi-tx",
-            left_callback=self.toggle_left_drawer,
-        )
-        content_root.add_widget(toolbar)
-        self._toolbar = toolbar
-
-        self._left_drawer = LeftDrawer(self)
 
         try:  # pragma: no cover
             nav = MainNavigation()
@@ -62,6 +50,8 @@ class PiTxApp(MDApp):
             self.channel_panel = nav.channel_panel
             self.model_settings_view = nav.model_settings_view
             self.system_settings_view = nav.system_settings_view
+            # Pass app reference to system settings for model management
+            self.system_settings_view.set_app(self)
             self._model_selector.set_channel_panel(self.channel_panel)
             content_root.add_widget(nav)
             self._bottom_nav = nav
@@ -74,42 +64,19 @@ class PiTxApp(MDApp):
         Clock.schedule_interval(self._poll_store_and_refresh, 1.0 / 30.0)
         screen.add_widget(content_root)
         screen_manager.add_widget(screen)
-        # Store reference to nav_layout for drawer control
-        self._nav_layout = nav_layout
-        nav_layout.add_widget(screen_manager)
-        nav_layout.add_widget(self._left_drawer)
-        return nav_layout
+        
+        return screen_manager
 
     def refresh_models(self):
         self.available_models = self._model_manager.list_models()
-        if not self.selected_model:
+        if not self.selected_model and not self._selecting_model:
             self._autoload_last_model()
-        # Update drawer list
+        # Update system settings model list
         try:
-            if self._left_drawer:
-                self._left_drawer.refresh()
+            if hasattr(self, 'system_settings_view') and self.system_settings_view:
+                self.system_settings_view.refresh_models()
         except Exception:
             pass
-
-    def toggle_left_drawer(self):
-        drawer = getattr(self, "_left_drawer", None)
-        if not drawer:
-            return
-
-        try:
-            state = getattr(drawer, "state", "close")
-
-            if state == "close":
-                # Force drawer to open by setting properties
-                drawer.state = "open"
-                drawer.set_state("open")
-                drawer.refresh()  # Refresh when opening
-            else:
-                drawer.state = "close"
-                drawer.set_state("close")
-
-        except Exception as e:
-            print(f"Drawer toggle failed: {e}")
 
     def _poll_store_and_refresh(self, *_):
         snap = channel_store.snapshot()
@@ -125,15 +92,34 @@ class PiTxApp(MDApp):
             print(f"Warning: failed to autoload last model: {e}")
 
     def select_model(self, model_name: str):
-        model, mapping = self._model_selector.apply_selection(model_name)
-        self._current_model = model
-        self.selected_model = model.name
-        self.model_mapping = {"name": model.name, "channels": mapping}
-        if hasattr(self, "_toolbar") and self._toolbar:
-            self._toolbar.title = f"{model_name}"
-        if hasattr(self, "model_settings_view") and self.model_settings_view:
-            self.model_settings_view.set_model(model_name)
-        self.dispatch("on_model_selected", model_name)
+        if self._selecting_model:
+            return  # Prevent recursion
+            
+        self._selecting_model = True
+        try:
+            if not model_name:
+                # Handle empty model name (clear selection)
+                self._current_model = None
+                self.selected_model = ""
+                self.model_mapping = {}
+                if hasattr(self, "model_settings_view") and self.model_settings_view:
+                    self.model_settings_view.title_label.text = "No Model Selected"
+                if hasattr(self, "channels_view") and self.channels_view:
+                    self.channels_view.set_model_name("")
+                self.dispatch("on_model_selected", "")
+                return
+                
+            model, mapping = self._model_selector.apply_selection(model_name)
+            self._current_model = model
+            self.selected_model = model.name
+            self.model_mapping = {"name": model.name, "channels": mapping}
+            if hasattr(self, "model_settings_view") and self.model_settings_view:
+                self.model_settings_view.set_model(model_name)
+            if hasattr(self, "channels_view") and self.channels_view:
+                self.channels_view.set_model_name(model_name)
+            self.dispatch("on_model_selected", model_name)
+        finally:
+            self._selecting_model = False
 
 
 def create_gui(input_controller: InputController):

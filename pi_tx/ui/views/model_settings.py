@@ -57,6 +57,18 @@ class ModelSettingsView(MDBoxLayout):
     def __init__(self, **kwargs):
         super().__init__(orientation="vertical", padding=0, spacing=0, **kwargs)
 
+        # Title label showing current model name
+        self.title_label = MDLabel(
+            text="No Model Selected",
+            theme_text_color="Primary",
+            font_style="H6",
+            size_hint_y=None,
+            height=dp(48),
+            halign="center",
+            valign="center",
+        )
+        self.add_widget(self.title_label)
+
         # Create tabs
         self._tabs = MDTabs()
         
@@ -82,6 +94,9 @@ class ModelSettingsView(MDBoxLayout):
         try:
             self._current_model = self._model_manager._repo.load_model(name)
 
+            # Update title
+            self.title_label.text = f"Model: {name}"
+
             # Also load the raw JSON for additional display fields
             import os
             import json
@@ -96,6 +111,7 @@ class ModelSettingsView(MDBoxLayout):
 
             self._refresh_content()
         except Exception as e:
+            self.title_label.text = "Error Loading Model"
             self._show_error(f"Error loading model: {str(e)}")
 
     def _refresh_content(self):
