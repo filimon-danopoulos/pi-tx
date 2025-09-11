@@ -2,32 +2,21 @@ from __future__ import annotations
 from typing import Dict
 from kivy.clock import Clock
 from kivy.properties import StringProperty, DictProperty
-from kivy.uix.scrollview import ScrollView  # legacy import (can remove later)
 from kivymd.app import MDApp
 from kivymd.uix.boxlayout import MDBoxLayout
-from kivymd.uix.menu import MDDropdownMenu
-from .components.top_bar import TopBar
-from kivymd.uix.button import MDIconButton
-from kivy.metrics import dp
-from kivymd.uix.bottomnavigation import (
-    MDBottomNavigation,
-    MDBottomNavigationItem,
-)  # legacy (now in component)
-from kivymd.uix.label import MDLabel  # still used for inline placeholders
-from kivymd.uix.list import OneLineListItem
+from kivymd.uix.navigationdrawer import MDNavigationLayout
+from kivymd.uix.screen import MDScreen
+from kivy.uix.screenmanager import ScreenManager
 
 from ..domain.channel_store import channel_store
 from ..input.controls import InputController
-
-# LAST_MODEL_FILE handling moved into ModelManager; no direct import needed here
 from .services.model_manager import ModelManager, Model
 from .services.model_selection import ModelSelectionController
 from .services.input_event_pump import InputEventPump
-from .components.channel_panel import ChannelPanel  # still referenced externally
+from .components.channel_panel import ChannelPanel
 from .components.main_navigation import MainNavigation
-
-
-"""GUI main module (PiTxApp) composed from smaller component modules."""
+from .components.top_bar import TopBar
+from .components.left_drawer import LeftDrawer
 
 
 class PiTxApp(MDApp):
@@ -53,134 +42,74 @@ class PiTxApp(MDApp):
     def build(self):
         self.theme_cls.theme_style = "Dark"
         self.theme_cls.primary_palette = "Teal"
-        root = MDBoxLayout(orientation="vertical")
+        nav_layout = MDNavigationLayout()
+        screen_manager = ScreenManager()
+        screen = MDScreen()
+        content_root = MDBoxLayout(orientation="vertical")
 
-        # Top toolbar (now in its own component)
         toolbar = TopBar(
             title="pi-tx",
-            right_action_items=[
-                ["folder", lambda x: self.open_model_menu(x)],
-                ["refresh", lambda x: self.refresh_models()],
-            ],
+            left_callback=self.toggle_left_drawer,
         )
-        root.add_widget(toolbar)
+        content_root.add_widget(toolbar)
         self._toolbar = toolbar
 
-        # Bottom navigation component
+        self._left_drawer = LeftDrawer(self)
+
         try:  # pragma: no cover
             nav = MainNavigation()
-            # expose references for existing logic
             self.channels_view = nav.channels_view
             self.channel_panel = nav.channel_panel
             self.model_settings_view = nav.model_settings_view
             self.system_settings_view = nav.system_settings_view
             self._model_selector.set_channel_panel(self.channel_panel)
-            root.add_widget(nav)
+            content_root.add_widget(nav)
             self._bottom_nav = nav
         except Exception as e:  # pragma: no cover
             print(f"Navigation init failed: {e}")
             self._bottom_nav = None
 
-        # Schedule periodic tasks
         Clock.schedule_once(lambda *_: self.refresh_models(), 0)
         Clock.schedule_interval(self._input_pump.tick, 1.0 / 100.0)
         Clock.schedule_interval(self._poll_store_and_refresh, 1.0 / 30.0)
-        return root
+        screen.add_widget(content_root)
+        screen_manager.add_widget(screen)
+        # Store reference to nav_layout for drawer control
+        self._nav_layout = nav_layout
+        nav_layout.add_widget(screen_manager)
+        nav_layout.add_widget(self._left_drawer)
+        return nav_layout
 
     def refresh_models(self):
         self.available_models = self._model_manager.list_models()
-        if hasattr(self, "_model_menu") and self._model_menu:
-            self._model_menu.dismiss()
-            self._model_menu = None
         if not self.selected_model:
             self._autoload_last_model()
-
-    def trigger_bind(self, duration: float = 2.0):
+        # Update drawer list
         try:
-            from ..app import UART_SENDER
-        except Exception:
-            UART_SENDER = None  # type: ignore
-        sender = globals().get("UART_SENDER") or locals().get("UART_SENDER")
-        # Prefer imported global from app
-        try:
-            from .. import app as app_mod
-
-            sender = app_mod.UART_SENDER
+            if self._left_drawer:
+                self._left_drawer.refresh()
         except Exception:
             pass
-        if not sender or not getattr(sender, "tx", None):
-            print("Bind: UART sender not active")
+
+    def toggle_left_drawer(self):
+        drawer = getattr(self, "_left_drawer", None)
+        if not drawer:
             return
+
         try:
-            sender.tx.start_bind(duration)
+            state = getattr(drawer, "state", "close")
+
+            if state == "close":
+                # Force drawer to open by setting properties
+                drawer.state = "open"
+                drawer.set_state("open")
+                drawer.refresh()  # Refresh when opening
+            else:
+                drawer.state = "close"
+                drawer.set_state("close")
+
         except Exception as e:
-            print(f"Bind trigger failed: {e}")
-
-    # Removed bind tab logic; bind now exposed via model menu
-
-    def open_model_menu(self, caller_widget=None):
-        if not getattr(self, "available_models", None):
-            self.refresh_models()
-        items = []
-
-        # Add bind option at the top of the menu
-        def _bind_and_close():
-            if getattr(self, "_model_menu", None):
-                self._model_menu.dismiss()
-            self.trigger_bind()
-
-        items.append(
-            {
-                "viewclass": "OneLineListItem",
-                "text": "Bind (2s)",
-                "on_release": _bind_and_close,
-            }
-        )
-
-        for model_name in self.available_models:
-
-            def _cb(m=model_name):
-                self._select_model_and_close(m)
-
-            items.append(
-                {"viewclass": "OneLineListItem", "text": model_name, "on_release": _cb}
-            )
-        if len(items) == 1:  # only bind present, no models available
-            items.append(
-                {
-                    "viewclass": "OneLineListItem",
-                    "text": "No models found",
-                    "on_release": lambda: None,
-                }
-            )
-        if hasattr(self, "_model_menu") and self._model_menu:
-            self._model_menu.dismiss()
-        from kivymd.uix.menu import MDDropdownMenu
-
-        self._model_menu = MDDropdownMenu(
-            caller=caller_widget or self._toolbar, items=items, width_mult=4
-        )
-        self._model_menu.open()
-
-    def _select_model_and_close(self, model_name: str):
-        if getattr(self, "_model_menu", None):
-            self._model_menu.dismiss()
-            self.select_model(model_name)
-
-    def select_model(self, model_name: str):
-        model, mapping = self._model_selector.apply_selection(model_name)
-        self._current_model = model
-        self.selected_model = model.name
-        self.model_mapping = {"name": model.name, "channels": mapping}
-        if hasattr(self, "_toolbar") and self._toolbar:
-            self._toolbar.title = f"pi-tx: {model_name}"
-        if hasattr(self, "model_settings_view") and self.model_settings_view:
-            self.model_settings_view.set_model(model_name)
-        self.dispatch("on_model_selected", model_name)
-
-    # Legacy methods kept minimal or removed; selection logic moved to controller
-
-    # Input processing now handled by InputEventPump (scheduled in build)
+            print(f"Drawer toggle failed: {e}")
 
     def _poll_store_and_refresh(self, *_):
         snap = channel_store.snapshot()
@@ -194,6 +123,17 @@ class PiTxApp(MDApp):
                 Clock.schedule_once(lambda *_: self.select_model(name), 0)
         except Exception as e:
             print(f"Warning: failed to autoload last model: {e}")
+
+    def select_model(self, model_name: str):
+        model, mapping = self._model_selector.apply_selection(model_name)
+        self._current_model = model
+        self.selected_model = model.name
+        self.model_mapping = {"name": model.name, "channels": mapping}
+        if hasattr(self, "_toolbar") and self._toolbar:
+            self._toolbar.title = f"{model_name}"
+        if hasattr(self, "model_settings_view") and self.model_settings_view:
+            self.model_settings_view.set_model(model_name)
+        self.dispatch("on_model_selected", model_name)
 
 
 def create_gui(input_controller: InputController):
