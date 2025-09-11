@@ -25,20 +25,20 @@ class ChannelBar(Widget):
         self.bar_color = [0.22, 0.55, 0.95, 1]
 
     def _redraw(self):
+        """Draw value in normalized range -1.0..1.0 always centered.
+
+        Negative values extend left from center, positive to the right.
+        Magnitude saturates at the half-width.
+        """
         self.canvas.clear()
         with self.canvas:
             Color(*self._bg_color)
             Rectangle(pos=self.pos, size=self.size)
-            val = float(self.value)
-            if self.channel_type == "bipolar":
-                half_w = self.width / 2.0
-                center_x = self.x + half_w
-                magnitude = max(0.0, min(1.0, abs(val))) * half_w
-                bar_x = center_x if val >= 0 else center_x - magnitude
-                bar_w = magnitude
-            else:
-                clamped = max(0.0, min(1.0, val))
-                bar_x = self.x
-                bar_w = self.width * clamped
+            val = max(-1.0, min(1.0, float(self.value)))
+            half_w = max(1.0, self.width / 2.0)
+            center_x = self.x + half_w
+            magnitude = abs(val) * half_w
+            bar_x = center_x if val >= 0 else center_x - magnitude
+            bar_w = magnitude
             Color(*self.bar_color)
             Rectangle(pos=(bar_x, self.y), size=(bar_w, self.height))

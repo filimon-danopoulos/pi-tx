@@ -53,7 +53,6 @@ class PiTxApp(MDApp):
     def build(self):
         self.theme_cls.theme_style = "Dark"
         self.theme_cls.primary_palette = "Teal"
-        self.theme_cls.accent_palette = "LightGreen"
         root = MDBoxLayout(orientation="vertical")
 
         # Top toolbar
