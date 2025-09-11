@@ -2,6 +2,9 @@ from kivymd.uix.navigationdrawer import MDNavigationDrawer
 from kivymd.uix.boxlayout import MDBoxLayout
 from kivymd.uix.list import OneLineListItem, MDList
 from kivymd.uix.scrollview import MDScrollView
+from kivymd.uix.card import MDSeparator
+from kivymd.uix.dialog import MDDialog
+from kivymd.uix.button import MDFlatButton
 
 
 class LeftDrawer(MDNavigationDrawer):
@@ -58,6 +61,18 @@ class LeftDrawer(MDNavigationDrawer):
 
             self._list.add_widget(item)
 
+        # Add dividing line
+        separator = MDSeparator()
+        self._list.add_widget(separator)
+
+        # Add create model button
+        create_button = OneLineListItem(
+            text="+ Create New Model", on_release=self._show_simple_dialog
+        )
+        create_button.theme_text_color = "Custom"
+        create_button.text_color = create_button.theme_cls.primary_color
+        self._list.add_widget(create_button)
+
     def _open_system(self):
         # Switch bottom nav to system tab if available
         if hasattr(self.app, "_bottom_nav") and self.app._bottom_nav:
@@ -72,3 +87,36 @@ class LeftDrawer(MDNavigationDrawer):
         # Only refresh if we're not currently closing/opening
         if hasattr(self, "state") and self.state in ("close", "open"):
             self.refresh()
+
+    def _show_simple_dialog(self, *args):
+        """Show a simple test dialog that can be closed."""
+        # Debug: Check if dialog is already open to prevent double-calling
+        if (
+            hasattr(self, "test_dialog")
+            and self.test_dialog
+            and self.test_dialog.parent
+        ):
+            # Dialog is already open, ignore this call
+            return
+
+        # Create a simple dialog with one close button
+        # Based on KivyMD source code analysis, the key is to store dialog reference
+        # and use simple method reference (not lambda) for button callback
+        self.test_dialog = MDDialog(
+            title="Create New Model",
+            text="This is a test dialog. Click the button to close it.",
+            buttons=[
+                MDFlatButton(
+                    text="Close",
+                    on_release=self._close_simple_dialog,
+                ),
+            ],
+        )
+        self.test_dialog.open()
+
+    def _close_simple_dialog(self, button_instance):
+        """Close the simple dialog."""
+        # Simple, direct dismissal - exactly as shown in KivyMD examples
+        if hasattr(self, "test_dialog") and self.test_dialog:
+            self.test_dialog.dismiss()
+            self.test_dialog = None
