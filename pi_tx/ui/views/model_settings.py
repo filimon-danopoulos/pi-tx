@@ -6,10 +6,38 @@ from kivymd.uix.label import MDLabel
 from kivymd.uix.scrollview import MDScrollView
 from kivymd.uix.list import MDList, OneLineListItem, TwoLineListItem, ThreeLineListItem
 from kivymd.uix.datatables import MDDataTable
+from kivymd.uix.tab import MDTabs, MDTabsBase
 from kivy.metrics import dp
 
 from ..services.model_manager import ModelManager
 from ...domain.model_json import Model
+
+
+class ChannelsTab(MDBoxLayout, MDTabsBase):
+    """Tab containing the channels data table."""
+    
+    def __init__(self, **kwargs):
+        super().__init__(orientation="vertical", spacing=0, **kwargs)
+        self.title = "Channels"
+        self.icon = "view-list"
+
+
+class SettingsTab(MDBoxLayout, MDTabsBase):
+    """Tab for model settings (placeholder for future features)."""
+    
+    def __init__(self, **kwargs):
+        super().__init__(orientation="vertical", padding=16, spacing=8, **kwargs)
+        self.title = "Settings"
+        self.icon = "cog"
+        
+        # Placeholder content
+        self.add_widget(
+            MDLabel(
+                text="Model settings coming soon",
+                halign="center",
+                valign="center",
+            )
+        )
 
 
 class ModelSettingsView(MDBoxLayout):
@@ -29,9 +57,19 @@ class ModelSettingsView(MDBoxLayout):
     def __init__(self, **kwargs):
         super().__init__(orientation="vertical", padding=0, spacing=0, **kwargs)
 
-        # Container for the data table
-        self._content = MDBoxLayout(orientation="vertical", spacing=0)
-        self.add_widget(self._content)
+        # Create tabs
+        self._tabs = MDTabs()
+        
+        # Create tab instances
+        self._channels_tab = ChannelsTab()
+        self._settings_tab = SettingsTab()
+        
+        # Add tabs to the tab widget
+        self._tabs.add_widget(self._channels_tab)
+        self._tabs.add_widget(self._settings_tab)
+        
+        # Add tabs to main container
+        self.add_widget(self._tabs)
 
         # Model manager for loading model details
         self._model_manager = ModelManager()
@@ -65,7 +103,7 @@ class ModelSettingsView(MDBoxLayout):
         if not self._current_model:
             return
 
-        self._content.clear_widgets()
+        self._channels_tab.clear_widgets()
 
         # Create channel mappings data table
         if self._current_model.channels:
@@ -112,7 +150,7 @@ class ModelSettingsView(MDBoxLayout):
 
         # Remove existing table if present
         if self._data_table:
-            self._content.remove_widget(self._data_table)
+            self._channels_tab.remove_widget(self._data_table)
 
         # Create the data table
         self._data_table = MDDataTable(
@@ -129,11 +167,11 @@ class ModelSettingsView(MDBoxLayout):
             sorted_order="ASC",
         )
 
-        # Add table to content
-        self._content.add_widget(self._data_table)
+        # Add table to channels tab
+        self._channels_tab.add_widget(self._data_table)
 
     def _show_error(self, error_msg: str):
         """Show an error message."""
-        self._content.clear_widgets()
+        self._channels_tab.clear_widgets()
         error_label = MDLabel(text=error_msg, theme_text_color="Error", halign="center")
-        self._content.add_widget(error_label)
+        self._channels_tab.add_widget(error_label)
