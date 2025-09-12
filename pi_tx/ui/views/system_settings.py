@@ -15,16 +15,18 @@ import json
 import os
 from pathlib import Path
 
+from ..components.model_topbar import ModelTopBar
+
 
 class ModelsTab(MDBoxLayout, MDTabsBase):
     """Tab for model selection and management."""
-    
+
     def __init__(self, app=None, **kwargs):
         super().__init__(orientation="vertical", padding=16, spacing=8, **kwargs)
         self.title = "Models"
         self.icon = "folder-multiple"
         self.app = app
-        
+
         # Button row
         button_layout = MDBoxLayout(
             orientation="horizontal",
@@ -32,7 +34,7 @@ class ModelsTab(MDBoxLayout, MDTabsBase):
             height=dp(48),
             spacing=8,
         )
-        
+
         # Remove model button
         self.remove_button = MDRaisedButton(
             text="Remove Selected",
@@ -43,7 +45,7 @@ class ModelsTab(MDBoxLayout, MDTabsBase):
             on_release=self._show_remove_model_dialog,
             disabled=True,  # Initially disabled until a model is selected
         )
-        
+
         # Create model button
         self.create_button = MDRaisedButton(
             text="Create New",
@@ -52,12 +54,12 @@ class ModelsTab(MDBoxLayout, MDTabsBase):
             icon_color="white",
             on_release=self._show_create_model_dialog,
         )
-        
+
         button_layout.add_widget(self.remove_button)
         button_layout.add_widget(MDLabel())  # Spacer
         button_layout.add_widget(self.create_button)
         self.add_widget(button_layout)
-        
+
         # Model list card
         model_card = MDCard(
             orientation="vertical",
@@ -66,7 +68,7 @@ class ModelsTab(MDBoxLayout, MDTabsBase):
             spacing=4,
             elevation=2,
         )
-        
+
         self._model_list = MDList()
         scroll = MDScrollView()
         scroll.add_widget(self._model_list)
@@ -84,7 +86,7 @@ class ModelsTab(MDBoxLayout, MDTabsBase):
         """Refresh the model list display."""
         if not self.app:
             return
-            
+
         self._model_list.clear_widgets()
 
         # Get available models
@@ -93,7 +95,7 @@ class ModelsTab(MDBoxLayout, MDTabsBase):
 
         # Get currently selected model for highlighting
         current_model = getattr(self.app, "selected_model", "")
-        
+
         # Update remove button state based on selection
         self.remove_button.disabled = not current_model
 
@@ -102,13 +104,11 @@ class ModelsTab(MDBoxLayout, MDTabsBase):
             def create_selection_handler(model_name):
                 def handler(*args):
                     self.app.select_model(model_name)
+
                 return handler
 
             # Create list item with visual indication of current selection
-            item = OneLineListItem(
-                text=name, 
-                on_release=create_selection_handler(name)
-            )
+            item = OneLineListItem(text=name, on_release=create_selection_handler(name))
 
             # Highlight currently selected model
             if name == current_model:
@@ -123,7 +123,11 @@ class ModelsTab(MDBoxLayout, MDTabsBase):
 
     def _show_remove_model_dialog(self, *args):
         """Show confirmation dialog to remove the selected model."""
-        if not self.app or not hasattr(self.app, 'selected_model') or not self.app.selected_model:
+        if (
+            not self.app
+            or not hasattr(self.app, "selected_model")
+            or not self.app.selected_model
+        ):
             return
 
         selected_model = self.app.selected_model
@@ -157,40 +161,48 @@ class ModelsTab(MDBoxLayout, MDTabsBase):
 
     def _remove_selected_model(self, button_instance):
         """Remove the currently selected model."""
-        if not self.app or not hasattr(self.app, 'selected_model') or not self.app.selected_model:
+        if (
+            not self.app
+            or not hasattr(self.app, "selected_model")
+            or not self.app.selected_model
+        ):
             self._close_remove_dialog(button_instance)
             return
 
         try:
             model_name = self.app.selected_model
             model_file = Path("models") / f"{model_name}.json"
-            
+
             if model_file.exists():
                 model_file.unlink()  # Delete the file
-                
+
                 # Clear current selection
                 self.app.selected_model = ""
                 self.app._current_model = None
-                
+
                 # Refresh model lists
                 self.app.refresh_models()
                 self.refresh_models()
-                
+
                 # Try to auto-load another model if available
                 if self.app.available_models:
                     # Select the first available model
                     first_model = self.app.available_models[0]
                     self.app.select_model(first_model)
-                
+
         except Exception as e:
             print(f"Error removing model: {e}")
-        
+
         self._close_remove_dialog(button_instance)
 
     def _show_create_model_dialog(self, *args):
         """Show a dialog to create a new model with name input."""
         # Check if dialog is already open
-        if hasattr(self, "create_dialog") and self.create_dialog and self.create_dialog.parent:
+        if (
+            hasattr(self, "create_dialog")
+            and self.create_dialog
+            and self.create_dialog.parent
+        ):
             return
 
         # Create text field for model name
@@ -234,7 +246,9 @@ class ModelsTab(MDBoxLayout, MDTabsBase):
         """Clear error state when user starts typing."""
         if hasattr(self, "name_field") and self.name_field:
             self.name_field.error = False
-            self.name_field.helper_text = "Only letters, numbers, and underscores allowed"
+            self.name_field.helper_text = (
+                "Only letters, numbers, and underscores allowed"
+            )
 
     def _save_new_model(self, button_instance):
         """Save the new model with the entered name."""
@@ -252,7 +266,9 @@ class ModelsTab(MDBoxLayout, MDTabsBase):
         # Check if name contains only letters, numbers, and underscores
         if not all(c.isalnum() or c == "_" for c in model_name):
             self.name_field.error = True
-            self.name_field.helper_text = "Only letters, numbers, and underscores allowed"
+            self.name_field.helper_text = (
+                "Only letters, numbers, and underscores allowed"
+            )
             return
 
         # Check if model already exists
@@ -331,12 +347,12 @@ class ModelsTab(MDBoxLayout, MDTabsBase):
 
 class GeneralTab(MDBoxLayout, MDTabsBase):
     """Tab for general system settings."""
-    
+
     def __init__(self, **kwargs):
         super().__init__(orientation="vertical", padding=16, spacing=8, **kwargs)
         self.title = "General"
         self.icon = "cog"
-        
+
         # Placeholder content for future system settings
         self.add_widget(
             MDLabel(
@@ -358,18 +374,23 @@ class SystemSettingsView(MDBoxLayout):
     def __init__(self, app=None, **kwargs):
         super().__init__(orientation="vertical", padding=0, spacing=0, **kwargs)
         self.app = app
-        
+
+        # Add custom topbar
+        self._topbar = ModelTopBar()
+        self._topbar.set_model_name("System Settings")
+        self.add_widget(self._topbar)
+
         # Create tabs
         self._tabs = MDTabs()
-        
+
         # Create tab instances
         self._models_tab = ModelsTab(app=app)
         self._general_tab = GeneralTab()
-        
+
         # Add tabs to the tab widget
         self._tabs.add_widget(self._models_tab)
         self._tabs.add_widget(self._general_tab)
-        
+
         # Add tabs to main container
         self.add_widget(self._tabs)
 

@@ -11,11 +11,12 @@ from kivy.metrics import dp
 
 from ..services.model_manager import ModelManager
 from ...domain.model_json import Model
+from ..components.model_topbar import ModelTopBar
 
 
 class ChannelsTab(MDBoxLayout, MDTabsBase):
     """Tab containing the channels data table."""
-    
+
     def __init__(self, **kwargs):
         super().__init__(orientation="vertical", spacing=0, **kwargs)
         self.title = "Channels"
@@ -24,12 +25,12 @@ class ChannelsTab(MDBoxLayout, MDTabsBase):
 
 class SettingsTab(MDBoxLayout, MDTabsBase):
     """Tab for model settings (placeholder for future features)."""
-    
+
     def __init__(self, **kwargs):
         super().__init__(orientation="vertical", padding=16, spacing=8, **kwargs)
         self.title = "Settings"
         self.icon = "cog"
-        
+
         # Placeholder content
         self.add_widget(
             MDLabel(
@@ -57,29 +58,21 @@ class ModelSettingsView(MDBoxLayout):
     def __init__(self, **kwargs):
         super().__init__(orientation="vertical", padding=0, spacing=0, **kwargs)
 
-        # Title label showing current model name
-        self.title_label = MDLabel(
-            text="No Model Selected",
-            theme_text_color="Primary",
-            font_style="H6",
-            size_hint_y=None,
-            height=dp(48),
-            halign="center",
-            valign="center",
-        )
-        self.add_widget(self.title_label)
+        # Add custom topbar
+        self._topbar = ModelTopBar()
+        self.add_widget(self._topbar)
 
         # Create tabs
         self._tabs = MDTabs()
-        
+
         # Create tab instances
         self._channels_tab = ChannelsTab()
         self._settings_tab = SettingsTab()
-        
+
         # Add tabs to the tab widget
         self._tabs.add_widget(self._channels_tab)
         self._tabs.add_widget(self._settings_tab)
-        
+
         # Add tabs to main container
         self.add_widget(self._tabs)
 
@@ -88,14 +81,16 @@ class ModelSettingsView(MDBoxLayout):
         self._current_model: Model | None = None
         self._raw_data = {}
         self._data_table = None
+        self._current_model_name = "No Model Selected"
 
     def set_model(self, name: str):
         """Load and display the full model configuration."""
         try:
             self._current_model = self._model_manager._repo.load_model(name)
+            self._current_model_name = f"Model: {name}"
 
-            # Update title
-            self.title_label.text = f"Model: {name}"
+            # Update topbar
+            self._topbar.set_model_name(self._current_model_name)
 
             # Also load the raw JSON for additional display fields
             import os
@@ -111,7 +106,8 @@ class ModelSettingsView(MDBoxLayout):
 
             self._refresh_content()
         except Exception as e:
-            self.title_label.text = "Error Loading Model"
+            self._current_model_name = "Error Loading Model"
+            self._topbar.set_model_name(self._current_model_name)
             self._show_error(f"Error loading model: {str(e)}")
 
     def _refresh_content(self):
@@ -119,6 +115,7 @@ class ModelSettingsView(MDBoxLayout):
         if not self._current_model:
             return
 
+        # Clear all widgets in the channels tab
         self._channels_tab.clear_widgets()
 
         # Create channel mappings data table
@@ -164,10 +161,6 @@ class ModelSettingsView(MDBoxLayout):
                 )
             )
 
-        # Remove existing table if present
-        if self._data_table:
-            self._channels_tab.remove_widget(self._data_table)
-
         # Create the data table
         self._data_table = MDDataTable(
             use_pagination=False,
@@ -188,6 +181,8 @@ class ModelSettingsView(MDBoxLayout):
 
     def _show_error(self, error_msg: str):
         """Show an error message."""
+        # Clear all widgets in the channels tab
         self._channels_tab.clear_widgets()
+
         error_label = MDLabel(text=error_msg, theme_text_color="Error", halign="center")
         self._channels_tab.add_widget(error_label)

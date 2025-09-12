@@ -6,6 +6,7 @@ from kivy.uix.scrollview import ScrollView
 from kivy.metrics import dp
 
 from ..components.channel_panel import ChannelPanel
+from ..components.model_topbar import ModelTopBar
 
 
 class ChannelsView(MDBoxLayout):
@@ -18,19 +19,11 @@ class ChannelsView(MDBoxLayout):
 
     def __init__(self, **kwargs):
         super().__init__(orientation="vertical", **kwargs)
-        
-        # Title label showing current model name
-        self.title_label = MDLabel(
-            text="No Model Selected",
-            theme_text_color="Primary",
-            font_style="H6",
-            size_hint_y=None,
-            height=dp(48),
-            halign="center",
-            valign="center",
-        )
-        self.add_widget(self.title_label)
-        
+
+        # Add custom topbar
+        self._topbar = ModelTopBar()
+        self.add_widget(self._topbar)
+
         # Channel panel in scroll view
         self.channel_panel = ChannelPanel()
         scroll = ScrollView()
@@ -40,9 +33,9 @@ class ChannelsView(MDBoxLayout):
     def set_model_name(self, model_name: str):
         """Update the title to show the current model name."""
         if model_name:
-            self.title_label.text = f"Model: {model_name}"
+            self._topbar.set_model_name(f"Model: {model_name}")
         else:
-            self.title_label.text = "No Model Selected"
+            self._topbar.set_model_name("No Model Selected")
 
     def set_values(self, snapshot: dict):  # convenience pass-through
         if self.channel_panel:
