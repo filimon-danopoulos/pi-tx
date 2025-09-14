@@ -86,23 +86,20 @@ class ModelSettingsView(MDBoxLayout):
     def set_model(self, name: str):
         """Load and display the full model configuration."""
         try:
-            self._current_model = self._model_manager._repo.load_model(name)
+            # Try to get cached model first, fall back to loading from file
+            self._current_model = self._model_manager.get_cached_model(name)
+            if self._current_model is None:
+                self._current_model = self._model_manager._repo.load_model(name)
+            
             self._current_model_name = f"Model: {name}"
 
             # Update topbar
             self._topbar.set_model_name(self._current_model_name)
 
-            # Also load the raw JSON for additional display fields
-            import os
-            import json
-
-            model_path = os.path.join(
-                self._model_manager._repo.models_dir, f"{name}.json"
-            )
-            self._raw_data = {}
-            if os.path.exists(model_path):
-                with open(model_path, "r") as f:
-                    self._raw_data = json.load(f)
+            # Use the already loaded model instead of re-reading the file
+            # The raw JSON data can be reconstructed if needed, but most display
+            # fields should be available from the parsed model object
+            self._raw_data = {}  # Clear previous data
 
             self._refresh_content()
         except Exception as e:
@@ -130,25 +127,15 @@ class ModelSettingsView(MDBoxLayout):
         for ch_id in sorted(self._current_model.channels.keys()):
             channel = self._current_model.channels[ch_id]
 
-            # Get additional info from raw JSON if available
-            raw_channel = {}
-            if hasattr(self, "_raw_data") and "channels" in self._raw_data:
-                raw_channel = self._raw_data["channels"].get(
-                    str(channel.channel_id), {}
-                )
-
-            # Format device info
-            device_name = raw_channel.get("device_name", "Unknown")
-            if not channel.device_path or device_name == "virtual":
+            # Format device info without relying on raw JSON
+            if not channel.device_path:
                 device_display = "Virtual"
             else:
-                device_display = device_name
+                # Extract device name from path or use a generic name
+                device_display = channel.device_path.split("/")[-1] if "/" in channel.device_path else channel.device_path
 
-            # Format control info
-            control_name = raw_channel.get("control_name", "")
-            control_display = (
-                control_name if control_name else f"Code {channel.control_code}"
-            )
+            # Format control info - use control code directly
+            control_display = f"Code {channel.control_code}"
 
             # Add row to table data
             row_data.append(

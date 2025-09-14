@@ -1,6 +1,6 @@
 from __future__ import annotations
 from pathlib import Path
-from typing import Dict, Tuple
+from typing import Dict, Tuple, Optional
 from ...domain.model_repo import ModelRepository, Model
 from ...domain.channel_store import channel_store
 from ...config.settings import MODELS_DIR, LAST_MODEL_FILE
@@ -14,17 +14,26 @@ class ModelManager:
     - Applying channel types & processors to channel_store.
     - Preparing a lightweight mapping structure for UI & input registration.
     - Persisting and restoring last selected model.
+    - Caching parsed models for performance.
     """
 
     def __init__(self, models_dir=MODELS_DIR, last_model_file=LAST_MODEL_FILE):
         self._repo = ModelRepository(models_dir)
         self._last_model_file = last_model_file
+        self._model_cache: Dict[str, Model] = {}  # Cache parsed models
 
     def list_models(self):
         return self._repo.list_models()
 
     def load_and_apply(self, model_name: str) -> Tuple[Model, Dict[str, Dict]]:
-        model = self._repo.load_model(model_name)
+        # Check cache first
+        if model_name in self._model_cache:
+            model = self._model_cache[model_name]
+        else:
+            # Load from file and cache
+            model = self._repo.load_model(model_name)
+            self._model_cache[model_name] = model
+            
         # Configure channel types first
         try:
             types_map = {
@@ -49,6 +58,18 @@ class ModelManager:
             for k, v in model.channels.items()
         }
         return model, mapping
+
+    def get_cached_model(self, model_name: str) -> Optional[Model]:
+        """Get a cached model without applying configuration."""
+        return self._model_cache.get(model_name)
+
+    def clear_cache(self):
+        """Clear the model cache."""
+        self._model_cache.clear()
+
+    def invalidate_model(self, model_name: str):
+        """Remove a specific model from the cache."""
+        self._model_cache.pop(model_name, None)
 
     def persist_last(self, model_name: str):
         try:
