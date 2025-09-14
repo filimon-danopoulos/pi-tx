@@ -12,10 +12,12 @@ from kivy.metrics import dp
 from kivy.clock import Clock
 import threading
 from datetime import datetime
+import json
 
 from ..services.model_manager import ModelManager
 from ...domain.model_json import Model
 from ..components.model_topbar import ModelTopBar
+from ...config.settings import STICK_MAPPING_FILE
 
 
 class ChannelsTab(MDBoxLayout, MDTabsBase):
@@ -268,22 +270,30 @@ class ModelSettingsView(MDBoxLayout):
 
     def _create_channels_table(self):
         """Create and display the channels data table."""
+        # Load stick mapping to get current device names
+        stick_mapping = self._load_stick_mapping()
+        
         # Prepare row data for the table
         row_data = []
 
         for ch_id in sorted(self._current_model.channels.keys()):
             channel = self._current_model.channels[ch_id]
 
-            # Format device info without relying on raw JSON
+            # Format device info using stick_mapping.json as source of truth
             if not channel.device_path:
                 device_display = "Virtual"
             else:
-                # Extract device name from path or use a generic name
-                device_display = (
-                    channel.device_path.split("/")[-1]
-                    if "/" in channel.device_path
-                    else channel.device_path
-                )
+                # Look up device name from stick mapping
+                device_info = stick_mapping.get(channel.device_path, {})
+                device_display = device_info.get("name", "Unknown Device")
+                
+                # Fallback to extracting from path if not found in mapping
+                if device_display == "Unknown Device":
+                    device_display = (
+                        channel.device_path.split("/")[-1]
+                        if "/" in channel.device_path
+                        else channel.device_path
+                    )
 
             # Format control info - use control code directly
             control_display = f"Code {channel.control_code}"
@@ -316,6 +326,14 @@ class ModelSettingsView(MDBoxLayout):
 
         # Add table to channels tab
         self._channels_tab.add_widget(self._data_table)
+
+    def _load_stick_mapping(self):
+        """Load stick mapping from JSON file."""
+        try:
+            with open(STICK_MAPPING_FILE, "r") as f:
+                return json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError):
+            return {}
 
     def _show_error(self, error_msg: str):
         """Show an error message."""
