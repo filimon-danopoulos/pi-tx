@@ -2,55 +2,56 @@
   "name": "tmp",
   "model_id": "e2f9b6c8c2e44d3d8947e7d6b8c6e5ab",
   "rx_num": 2,
+  "bind_timestamp": "2025-09-14T23:28:40.154577",
   "channels": {
     "1": {
+      "control_type": "bipolar",
       "device_path": "/dev/input/by-path/pci-0000:00:14.0-usb-0:3:1.0-event-joystick",
-      "device_name": "Thrustmaster T.16000M",
       "control_code": "1",
-      "control_name": "stick-y",
-      "control_type": "bipolar"
+      "device_name": "Thrustmaster T.16000M",
+      "control_name": "stick-y"
     },
     "2": {
+      "control_type": "bipolar",
       "device_path": "/dev/input/by-path/pci-0000:00:14.0-usb-0:3:1.0-event-joystick",
-      "device_name": "Thrustmaster T.16000M",
       "control_code": "0",
-      "control_name": "stick-x",
-      "control_type": "bipolar"
+      "device_name": "Thrustmaster T.16000M",
+      "control_name": "stick-x"
     },
     "3": {
+      "control_type": "bipolar",
       "device_path": "/dev/input/by-path/pci-0000:00:14.0-usb-0:2:1.0-event-joystick",
-      "device_name": "Thrustmaster T.16000M",
       "control_code": "1",
-      "control_name": "stick-y",
-      "control_type": "bipolar"
+      "device_name": "Thrustmaster T.16000M",
+      "control_name": "stick-y"
     },
     "4": {
+      "control_type": "bipolar",
       "device_path": "/dev/input/by-path/pci-0000:00:14.0-usb-0:2:1.0-event-joystick",
-      "device_name": "Thrustmaster T.16000M",
       "control_code": "0",
-      "control_name": "stick-x",
-      "control_type": "bipolar"
+      "device_name": "Thrustmaster T.16000M",
+      "control_name": "stick-x"
     },
     "5": {
+      "control_type": "bipolar",
       "device_path": "/dev/input/by-path/pci-0000:00:14.0-usb-0:3:1.0-event-joystick",
-      "device_name": "Thrustmaster T.16000M",
       "control_code": "17",
-      "control_name": "hat-y",
-      "control_type": "bipolar"
+      "device_name": "Thrustmaster T.16000M",
+      "control_name": "hat-y"
     },
     "6": {
+      "control_type": "latching-button",
       "device_path": "/dev/input/by-path/pci-0000:00:14.0-usb-0:3:1.0-event-joystick",
-      "device_name": "Thrustmaster T.16000M",
       "control_code": "289",
-      "control_name": "sb-2",
-      "control_type": "latching-button"
+      "device_name": "Thrustmaster T.16000M",
+      "control_name": "sb-2"
     },
     "7": {
+      "control_type": "unipolar",
       "device_path": "",
-      "device_name": "virtual",
       "control_code": "virtual",
-      "control_name": "sound-mix",
-      "control_type": "unipolar"
+      "device_name": "virtual",
+      "control_name": "sound-mix"
     }
   },
   "processors": {
@@ -64,20 +65,40 @@
       "7": true,
       "8": false
     },
-      "differential": [
-        { "left": 2, "right": 1, "inverse": true },
-        { "left": 4, "right": 3, "inverse": false }
-      ],
-  "aggregate": [
-        {
-          "channels": [
-            {"id": 1, "value": 0.2},
-            {"id": 2, "value": 0.2},
-            {"id": 3, "value": 0.4},
-            {"id": 4, "value": 0.4}
-          ],
-          "target": 7
-        }
-      ]
+    "differential": [
+      {
+        "left": 2,
+        "right": 1,
+        "inverse": true
+      },
+      {
+        "left": 4,
+        "right": 3,
+        "inverse": false
+      }
+    ],
+    "aggregate": [
+      {
+        "channels": [
+          {
+            "id": 1,
+            "value": 0.2
+          },
+          {
+            "id": 2,
+            "value": 0.2
+          },
+          {
+            "id": 3,
+            "value": 0.4
+          },
+          {
+            "id": 4,
+            "value": 0.4
+          }
+        ],
+        "target": 7
+      }
+    ]
   }
 }

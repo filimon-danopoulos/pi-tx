@@ -12,13 +12,17 @@ from .ui.gui import create_gui
 def run():
     controller = InputController(debug=False)
     app = create_gui(controller)
-    # Only enable UART on Raspberry Pi hardware
+    # Enable UART on Raspberry Pi hardware OR when debug mode is explicitly requested
     try:
         from .infrastructure.uart_tx import ON_PI
     except Exception:
         ON_PI = False  # type: ignore
 
-    if ON_PI:
+    # Allow debug UART mode even when not on Pi
+    debug_mode = bool(os.environ.get("PI_TX_DEBUG_UART"))
+    enable_uart = ON_PI or debug_mode
+
+    if enable_uart:
         try:
             from .infrastructure.uart_tx import UartTx, MultiSerialTX, DebugUartTx
 
@@ -29,11 +33,15 @@ def run():
                 return snap[:16]
 
             port = os.environ.get("UART_PORT") or "/dev/serial0"
-            debug_mode = bool(os.environ.get("PI_TX_DEBUG_UART"))
+            verbose_uart_logging = bool(os.environ.get("PI_TX_UART_VERBOSE"))
             if debug_mode:
-                uart = DebugUartTx()
+                uart = DebugUartTx(verbose_logging=verbose_uart_logging)
+                print("Using Debug UART (no real hardware needed)")
+                if verbose_uart_logging:
+                    print("Verbose UART logging enabled - check console for frame details")
             else:
                 uart = UartTx(port=port)
+                print(f"Using real UART on port: {port}")
             if not uart.open():
                 raise Exception(f"Failed to open UART port: {port}")
 
@@ -67,7 +75,10 @@ def run():
             if os.environ.get("PI_TX_UART_TRACE") == "1":
                 traceback.print_exc()
     else:
-        print("UART disabled (not running on Raspberry Pi)")
+        if ON_PI:
+            print("UART disabled (not running on Raspberry Pi)")
+        else:
+            print("UART disabled (set PI_TX_DEBUG_UART=1 to enable debug mode)")
     app.run()
 
 

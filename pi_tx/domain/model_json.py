@@ -13,6 +13,8 @@ class ChannelConfig:
     control_type: str
     device_path: str
     control_code: str  # may be numeric string or symbolic (e.g. 'virtual')
+    device_name: str = ""  # Human-readable device name
+    control_name: str = ""  # Human-readable control name
 
 
 @dataclass
@@ -23,6 +25,7 @@ class Model:
     model_id: str = field(default_factory=lambda: uuid.uuid4().hex)
     rx_num: int = 0
     model_index: int = 0
+    bind_timestamp: str = ""  # ISO timestamp when model was last bound
 
 
 def parse_model_dict(name: str, data: Dict[str, Any]) -> Model:
@@ -33,6 +36,7 @@ def parse_model_dict(name: str, data: Dict[str, Any]) -> Model:
     raw = data.get("channels", {}) or {}
     processors_cfg = data.get("processors", {}) or {}
     model_id = data.get("model_id") or uuid.uuid4().hex
+    bind_timestamp = data.get("bind_timestamp", "")
     # model_index & rx_num normalization
     model_index_raw = data.get("model_index")
     try:
@@ -61,6 +65,8 @@ def parse_model_dict(name: str, data: Dict[str, Any]) -> Model:
                 control_type=cfg.get("control_type") or cfg.get("type") or "unipolar",
                 device_path=cfg.get("device_path", ""),
                 control_code=str(ctrl_code_raw),
+                device_name=cfg.get("device_name", ""),
+                control_name=cfg.get("control_name", ""),
             )
         except Exception as e:
             print(f"ModelParser: skipping channel {key}: {e}")
@@ -71,4 +77,5 @@ def parse_model_dict(name: str, data: Dict[str, Any]) -> Model:
         model_id=model_id,
         rx_num=rx_num,
         model_index=model_index,
+        bind_timestamp=bind_timestamp,
     )

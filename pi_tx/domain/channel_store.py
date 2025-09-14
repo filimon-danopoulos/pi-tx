@@ -20,9 +20,9 @@ class ChannelStore:
     def _build_pipeline(self):
         self._processors: List[Callable[[List[float]], List[float]]] = [
             self._identity_proc,
-            self._reverse_proc,
             self._differential_mix_proc,
             self._aggregate_proc,
+            self._reverse_proc,
             self._endpoint_proc,
         ]
         self._recompute()

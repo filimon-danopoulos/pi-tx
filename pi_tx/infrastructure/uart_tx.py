@@ -118,13 +118,16 @@ class DebugUartTx:
     is being sent without real hardware attached.
     """
 
-    def __init__(self, name: str = "debug-uart", max_frames: int = 100):
+    def __init__(self, name: str = "debug-uart", max_frames: int = 100, verbose_logging: bool = False):
         self.port = name
         self.baud = 100000
         self._open = False
         self._frames: list[dict] = []
         self._max_frames = max_frames
         self._lock = threading.Lock()
+        self._verbose_logging = verbose_logging
+        self._frame_count = 0
+        self._bind_frame_count = 0
 
     def open(self) -> bool:  # match interface
         self._open = True
@@ -139,6 +142,13 @@ class DebugUartTx:
         if not self._open:
             return False
         parsed = self._parse_frame(data)
+        
+        # Update counters for logging
+        self._frame_count += 1
+        is_bind = parsed.get("bind", False)
+        if is_bind:
+            self._bind_frame_count += 1
+            
         with self._lock:
             self._frames.append(
                 {
@@ -149,6 +159,24 @@ class DebugUartTx:
             )
             if len(self._frames) > self._max_frames:
                 self._frames = self._frames[-self._max_frames :]
+        
+        # Optional verbose logging
+        if self._verbose_logging:
+            status = "🔗 BIND" if is_bind else "📡 DATA"
+            channels = parsed.get("channels", [])[:4]  # Show first 4 channels
+            channel_str = [f'{c:4d}' for c in channels] if channels else []
+            
+            logging.info(f"UART {status} | RX:{parsed.get('rx_num', '?'):2} | "
+                        f"Proto:{parsed.get('protocol', '?'):2} | "
+                        f"Sub:{parsed.get('sub_protocol', '?'):2} | "
+                        f"Chans: {channel_str}")
+            
+            # Summary every 10 frames
+            if self._frame_count % 10 == 0:
+                regular_frames = self._frame_count - self._bind_frame_count
+                logging.info(f"UART Frame Summary: {self._frame_count} total "
+                           f"({regular_frames} regular, {self._bind_frame_count} bind)")
+        
         return True
 
     # Parsing helpers -------------------------------------------------
