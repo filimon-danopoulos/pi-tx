@@ -83,7 +83,13 @@ class ValueStore:
             reverse_cfg = config.get("reverse", {})
             for key, val in reverse_cfg.items():
                 try:
-                    idx = int(key) - 1
+                    # Expect var1 format only
+                    if isinstance(key, str) and key.startswith("var"):
+                        ch_num = int(key[3:])  # Extract number from "var1", "var2", etc.
+                        idx = ch_num - 1
+                    else:
+                        raise ValueError(f"Invalid reverse key format {key}, expected 'var1' format")
+                    
                     if 0 <= idx < len(self._reverse_flags) and isinstance(val, bool):
                         self._reverse_flags[idx] = val
                 except (ValueError, TypeError) as e:
@@ -93,7 +99,12 @@ class ValueStore:
             values_cfg = config.get("values", {})
             for key, val in values_cfg.items():
                 try:
-                    ch_num = int(key)
+                    # Expect var1 format only
+                    if isinstance(key, str) and key.startswith("var"):
+                        ch_num = int(key[3:])  # Extract number from "var1", "var2", etc.
+                    else:
+                        raise ValueError(f"Invalid values key format {key}, expected 'var1' format")
+                        
                     if isinstance(val, dict):
                         self._channel_values[ch_num] = val
                 except (ValueError, TypeError) as e:
@@ -130,12 +141,16 @@ class ValueStore:
 
     def save_configuration(self):
         """Save current configuration to system_values.json file."""
-        config = {"reverse": {}, "values": self._channel_values}
+        config = {"reverse": {}, "values": {}}
 
-        # Save reverse flags (only non-default values)
+        # Save reverse flags (only non-default values) using var prefix
         for i, reverse in enumerate(self._reverse_flags):
             if reverse:
-                config["reverse"][str(i + 1)] = True
+                config["reverse"][f"var{i + 1}"] = True
+
+        # Save channel values using var prefix
+        for ch_num, ch_data in self._channel_values.items():
+            config["values"][f"var{ch_num}"] = ch_data
 
         try:
             os.makedirs(os.path.dirname(self._config_path), exist_ok=True)
@@ -148,11 +163,17 @@ class ValueStore:
         """Configure reverse flags for specific channels.
 
         Args:
-            reverse_config: Dict mapping channel numbers (as strings) to reverse flags
+            reverse_config: Dict mapping channel identifiers (var1, var2, etc.) to reverse flags
         """
         for key, val in reverse_config.items():
             try:
-                idx = int(key) - 1
+                # Expect var1 format only
+                if isinstance(key, str) and key.startswith("var"):
+                    ch_num = int(key[3:])  # Extract number from "var1", "var2", etc.
+                    idx = ch_num - 1
+                else:
+                    raise ValueError(f"Invalid reverse key format {key}, expected 'var1' format")
+                    
                 if 0 <= idx < len(self._reverse_flags) and isinstance(val, bool):
                     self._reverse_flags[idx] = val
             except (ValueError, TypeError) as e:
@@ -163,11 +184,17 @@ class ValueStore:
         """Configure channel types for specific channels.
 
         Args:
-            channel_types: Dict mapping channel numbers (as strings) to types ("bipolar" or "unipolar")
+            channel_types: Dict mapping channel identifiers (var1, var2, etc.) to types
         """
         for key, val in channel_types.items():
             try:
-                idx = int(key) - 1
+                # Expect var1 format only
+                if isinstance(key, str) and key.startswith("var"):
+                    ch_num = int(key[3:])  # Extract number from "var1", "var2", etc.
+                    idx = ch_num - 1
+                else:
+                    raise ValueError(f"Invalid channel_types key format {key}, expected 'var1' format")
+                    
                 if 0 <= idx < len(self._channel_types) and isinstance(val, str):
                     if val in ["bipolar", "unipolar"]:
                         self._channel_types[idx] = val
