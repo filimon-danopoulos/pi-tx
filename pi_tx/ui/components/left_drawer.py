@@ -78,10 +78,10 @@ class LeftDrawer(MDNavigationDrawer):
         self._list.add_widget(create_button)
 
     def _open_system(self):
-        # Switch bottom nav to system tab if available
-        if hasattr(self.app, "_bottom_nav") and self.app._bottom_nav:
+        # Switch navigation rail to system tab if available
+        if hasattr(self.app, "_navigation_rail") and self.app._navigation_rail:
             try:
-                self.app._bottom_nav.switch_tab("system")
+                self.app._navigation_rail.switch_to_tab("system")
             except Exception:
                 pass
         self.set_state("close")

@@ -13,7 +13,7 @@ from .services.model_manager import ModelManager, Model
 from .services.model_selection import ModelSelectionController
 from .services.input_event_pump import InputEventPump
 from .components.channel_panel import ChannelPanel
-from .components.main_navigation import MainNavigation
+from .components.navigation_rail import MainNavigationRail
 
 
 class PiTxApp(MDApp):
@@ -45,7 +45,7 @@ class PiTxApp(MDApp):
         content_root = MDBoxLayout(orientation="vertical")
 
         try:  # pragma: no cover
-            nav = MainNavigation()
+            nav = MainNavigationRail()
             self.channels_view = nav.channels_view
             self.channel_panel = nav.channel_panel
             self.model_settings_view = nav.model_settings_view
@@ -54,10 +54,10 @@ class PiTxApp(MDApp):
             self.system_settings_view.set_app(self)
             self._model_selector.set_channel_panel(self.channel_panel)
             content_root.add_widget(nav)
-            self._bottom_nav = nav
+            self._navigation_rail = nav
         except Exception as e:  # pragma: no cover
             print(f"Navigation init failed: {e}")
-            self._bottom_nav = None
+            self._navigation_rail = None
 
         Clock.schedule_once(lambda *_: self.refresh_models(), 0)
         Clock.schedule_interval(self._input_pump.tick, 1.0 / 100.0)

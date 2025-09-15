@@ -16,7 +16,6 @@ import json
 import os
 from pathlib import Path
 
-from ..components.model_topbar import ModelTopBar
 from ...domain.value_store import value_store
 
 
@@ -478,11 +477,6 @@ class SystemSettingsView(MDBoxLayout):
         self.app = app
         # Ensure this view fills available space
         self.size_hint = (1, 1)
-
-        # Add custom topbar
-        self._topbar = ModelTopBar()
-        self._topbar.set_model_name("System Settings")
-        self.add_widget(self._topbar)
 
         # Create tabs with explicit sizing
         self._tabs = MDTabs(size_hint=(1, 1))
