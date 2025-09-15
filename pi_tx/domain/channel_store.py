@@ -104,9 +104,15 @@ class ChannelStore:
         rev = processors_cfg.get("reverse") or {}
         for key, val in rev.items():
             try:
-                idx = int(key) - 1
-                if 0 <= idx < len(self._reverse_flags) and isinstance(val, bool):
-                    self._reverse_flags[idx] = val
+                # Expect ch1 format only
+                if isinstance(key, str) and key.startswith("ch"):
+                    idx = int(key[2:]) - 1
+                    if 0 <= idx < len(self._reverse_flags) and isinstance(val, bool):
+                        self._reverse_flags[idx] = val
+                else:
+                    print(
+                        f"ChannelStore: invalid reverse key format {key}, expected 'ch1' format"
+                    )
             except Exception as e:
                 print(f"ChannelStore: bad reverse entry {key}: {e}")
         diff_cfg = processors_cfg.get("differential")
@@ -116,8 +122,24 @@ class ChannelStore:
                 if not isinstance(m, dict):
                     continue
                 try:
-                    left = int(m.get("left")) - 1
-                    right = int(m.get("right")) - 1
+                    # Expect ch1 format only
+                    left_raw = m.get("left")
+                    right_raw = m.get("right")
+
+                    if isinstance(left_raw, str) and left_raw.startswith("ch"):
+                        left = int(left_raw[2:]) - 1
+                    else:
+                        raise ValueError(
+                            f"Invalid left format {left_raw}, expected 'ch1' format"
+                        )
+
+                    if isinstance(right_raw, str) and right_raw.startswith("ch"):
+                        right = int(right_raw[2:]) - 1
+                    else:
+                        raise ValueError(
+                            f"Invalid right format {right_raw}, expected 'ch1' format"
+                        )
+
                     inverse = bool(m.get("inverse", False))
                     parsed.append((left, right, inverse))
                 except Exception:
@@ -143,13 +165,25 @@ class ChannelStore:
                             )
                             if ch_id is None:
                                 continue
-                            cid = int(ch_id)
+                            # Expect ch1 format only
+                            if isinstance(ch_id, str) and ch_id.startswith("ch"):
+                                cid = int(ch_id[2:])
+                            else:
+                                raise ValueError(
+                                    f"Invalid channel ID format {ch_id}, expected 'ch1' format"
+                                )
                             if cid <= 0:
                                 continue
                             w = entry.get("value")
                             weight = float(w) if w is not None else 1.0
                         else:
-                            cid = int(entry)
+                            # Expect ch1 format only for direct entries
+                            if isinstance(entry, str) and entry.startswith("ch"):
+                                cid = int(entry[2:])
+                            else:
+                                raise ValueError(
+                                    f"Invalid channel entry format {entry}, expected 'ch1' format"
+                                )
                             if cid <= 0:
                                 continue
                             weight = (
@@ -161,9 +195,15 @@ class ChannelStore:
                             weight = 1.0
                         chan_weights.append((cid, weight))
                     target_raw = m.get("target")
-                    target_idx: int | None = (
-                        int(target_raw) if target_raw is not None else None
-                    )
+                    target_idx: int | None = None
+                    if target_raw is not None:
+                        # Expect ch1 format only for target
+                        if isinstance(target_raw, str) and target_raw.startswith("ch"):
+                            target_idx = int(target_raw[2:])
+                        else:
+                            raise ValueError(
+                                f"Invalid target format {target_raw}, expected 'ch1' format"
+                            )
                     if chan_weights:
                         sm_parsed.append((chan_weights, target_idx))
                 except Exception:
@@ -175,11 +215,28 @@ class ChannelStore:
         parsed: List[tuple[int, int, bool]] = []
         for m in mixes:
             try:
-                s = int(m.get("left")) - 1
-                t = int(m.get("right")) - 1
+                # Expect ch1 format only
+                left_raw = m.get("left")
+                right_raw = m.get("right")
+
+                if isinstance(left_raw, str) and left_raw.startswith("ch"):
+                    s = int(left_raw[2:]) - 1
+                else:
+                    raise ValueError(
+                        f"Invalid left format {left_raw}, expected 'ch1' format"
+                    )
+
+                if isinstance(right_raw, str) and right_raw.startswith("ch"):
+                    t = int(right_raw[2:]) - 1
+                else:
+                    raise ValueError(
+                        f"Invalid right format {right_raw}, expected 'ch1' format"
+                    )
+
                 inv = bool(m.get("inverse", False))
                 parsed.append((s, t, inv))
-            except Exception:
+            except Exception as e:
+                print(f"ChannelStore: skipping differential mix {m}: {e}")
                 continue
         self._differential_mixes = parsed
         self._build_pipeline()

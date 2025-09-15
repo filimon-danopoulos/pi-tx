@@ -56,7 +56,13 @@ def parse_model_dict(name: str, data: Dict[str, Any]) -> Model:
     parsed: Dict[int, ChannelConfig] = {}
     for key, cfg in raw.items():
         try:
-            ch_id = int(key)
+            # Expect ch1 format only
+            if isinstance(key, str) and key.startswith("ch"):
+                ch_id = int(key[2:])
+            else:
+                raise ValueError(
+                    f"Invalid channel key format {key}, expected 'ch1' format"
+                )
             ctrl_code_raw = cfg.get("control_code")
             if ctrl_code_raw is None:
                 raise ValueError("missing control_code")

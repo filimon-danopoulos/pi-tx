@@ -34,7 +34,7 @@ class ModelRepository:
         """Save a model to JSON file."""
         os.makedirs(self.models_dir, exist_ok=True)
         path = os.path.join(self.models_dir, f"{model.name}.json")
-        
+
         # Convert model to dict, but handle channels specially
         model_dict = {
             "name": model.name,
@@ -45,23 +45,23 @@ class ModelRepository:
             "channels": {},
             "processors": model.processors,
         }
-        
-        # Convert channels to the expected JSON format
+
+        # Convert channels to the expected JSON format using ch1 format
         for ch_id, channel in model.channels.items():
             channel_dict = {
                 "control_type": channel.control_type,
                 "device_path": channel.device_path,
                 "control_code": channel.control_code,
             }
-            
+
             # Include optional fields if they exist
             if channel.device_name:
                 channel_dict["device_name"] = channel.device_name
             if channel.control_name:
                 channel_dict["control_name"] = channel.control_name
-                
-            model_dict["channels"][str(ch_id)] = channel_dict
-        
+
+            model_dict["channels"][f"ch{ch_id}"] = channel_dict
+
         with open(path, "w") as f:
             json.dump(model_dict, f, indent=2)
         print(f"Saved model to {path}")

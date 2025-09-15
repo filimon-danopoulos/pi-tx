@@ -17,7 +17,7 @@ class ChannelRow(MDBoxLayout):
         )
         self.channel_number = channel_number
         self.channel_type = channel_type or "unipolar"
-        base_label = f"CH_{channel_number}"
+        base_label = f"ch{channel_number}"
         self.label = MDLabel(text=base_label, size_hint_x=None, width=dp(60))
         self.bar = ChannelBar(self.channel_type, size_hint_x=1)
         self.value_label = MDLabel(

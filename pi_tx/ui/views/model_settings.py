@@ -76,12 +76,14 @@ class SettingsTab(MDBoxLayout, MDTabsBase):
         """Update button text based on current model's bind status."""
         if not self.parent_view or not self.parent_view._current_model:
             return
-        
+
         model = self.parent_view._current_model
         if model.bind_timestamp:
             self._bind_button.text = "Rebind Model"
-            self._bind_button.icon = "link-variant-plus" 
-            self._status_label.text = f"Last bound: {self._format_bind_time(model.bind_timestamp)}"
+            self._bind_button.icon = "link-variant-plus"
+            self._status_label.text = (
+                f"Last bound: {self._format_bind_time(model.bind_timestamp)}"
+            )
         else:
             self._bind_button.text = "Bind Model"
             self._bind_button.icon = "link-variant"
@@ -135,7 +137,7 @@ class SettingsTab(MDBoxLayout, MDTabsBase):
     def _bind_complete(self, success, message):
         """Complete the bind process and update UI."""
         self._bind_button.disabled = False
-        
+
         if success:
             # Save bind timestamp to model file
             self._save_bind_timestamp()
@@ -147,7 +149,9 @@ class SettingsTab(MDBoxLayout, MDTabsBase):
             # Reset to default after 3 seconds
             Clock.schedule_once(lambda dt: self._reset_status(), 3.0)
         else:
-            self._bind_button.text = "Bind Model" if not self._is_model_bound() else "Rebind Model"
+            self._bind_button.text = (
+                "Bind Model" if not self._is_model_bound() else "Rebind Model"
+            )
             self._status_label.text = message
             self._status_label.theme_text_color = "Error"
             # Reset to default after 5 seconds
@@ -157,16 +161,16 @@ class SettingsTab(MDBoxLayout, MDTabsBase):
         """Save the current timestamp as bind time to the model file."""
         if not self.parent_view or not self.parent_view._current_model:
             return
-        
+
         try:
             # Update the model object
             model = self.parent_view._current_model
             model.bind_timestamp = datetime.now().isoformat()
-            
+
             # Save to file using ModelRepository
             repo = self.parent_view._model_manager._repo
             repo.save_model(model)
-            
+
             print(f"Saved bind timestamp for model {model.name}")
         except Exception as e:
             print(f"Error saving bind timestamp: {e}")
@@ -181,7 +185,9 @@ class SettingsTab(MDBoxLayout, MDTabsBase):
         """Reset status label to default."""
         if self._is_model_bound():
             model = self.parent_view._current_model
-            self._status_label.text = f"Last bound: {self._format_bind_time(model.bind_timestamp)}"
+            self._status_label.text = (
+                f"Last bound: {self._format_bind_time(model.bind_timestamp)}"
+            )
         else:
             self._status_label.text = "Ready to bind"
         self._status_label.theme_text_color = "Secondary"
@@ -272,7 +278,7 @@ class ModelSettingsView(MDBoxLayout):
         """Create and display the channels data table."""
         # Load stick mapping to get current device names
         stick_mapping = self._load_stick_mapping()
-        
+
         # Prepare row data for the table
         row_data = []
 
@@ -286,7 +292,7 @@ class ModelSettingsView(MDBoxLayout):
                 # Look up device name from stick mapping
                 device_info = stick_mapping.get(channel.device_path, {})
                 device_display = device_info.get("name", "Unknown Device")
-                
+
                 # Fallback to extracting from path if not found in mapping
                 if device_display == "Unknown Device":
                     device_display = (
@@ -301,7 +307,7 @@ class ModelSettingsView(MDBoxLayout):
             # Add row to table data
             row_data.append(
                 (
-                    f"CH{channel.channel_id}",
+                    f"ch{channel.channel_id}",  # Channel column - now uses chX format
                     channel.control_type.title(),
                     device_display,
                     control_display,

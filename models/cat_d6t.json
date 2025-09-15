@@ -4,49 +4,49 @@
   "rx_num": 1,
   "bind_timestamp": "",
   "channels": {
-    "1": {
+    "ch1": {
       "control_type": "bipolar",
       "device_path": "/dev/input/by-path/pci-0000:00:14.0-usb-0:3:1.0-event-joystick",
       "control_code": "1",
       "device_name": "Thrustmaster T.16000M",
       "control_name": "stick-y"
     },
-    "2": {
+    "ch2": {
       "control_type": "bipolar",
       "device_path": "/dev/input/by-path/pci-0000:00:14.0-usb-0:3:1.0-event-joystick",
       "control_code": "0",
       "device_name": "Thrustmaster T.16000M",
       "control_name": "stick-x"
     },
-    "3": {
+    "ch3": {
       "control_type": "bipolar",
       "device_path": "/dev/input/by-path/pci-0000:00:14.0-usb-0:2:1.0-event-joystick",
       "control_code": "1",
       "device_name": "Thrustmaster T.16000M",
       "control_name": "stick-y"
     },
-    "4": {
+    "ch4": {
       "control_type": "bipolar",
       "device_path": "/dev/input/by-path/pci-0000:00:14.0-usb-0:2:1.0-event-joystick",
       "control_code": "0",
       "device_name": "Thrustmaster T.16000M",
       "control_name": "stick-x"
     },
-    "5": {
+    "ch5": {
       "control_type": "bipolar",
       "device_path": "/dev/input/by-path/pci-0000:00:14.0-usb-0:3:1.0-event-joystick",
       "control_code": "17",
       "device_name": "Thrustmaster T.16000M",
       "control_name": "hat-y"
     },
-    "6": {
+    "ch6": {
       "control_type": "latching-button",
       "device_path": "/dev/input/by-path/pci-0000:00:14.0-usb-0:3:1.0-event-joystick",
       "control_code": "289",
       "device_name": "Thrustmaster T.16000M",
       "control_name": "sb-2"
     },
-    "7": {
+    "ch7": {
       "control_type": "unipolar",
       "device_path": "",
       "control_code": "virtual",
@@ -56,24 +56,24 @@
   },
   "processors": {
     "reverse": {
-      "1": true,
-      "2": false,
-      "3": true,
-      "4": false,
-      "5": true,
-      "6": false,
-      "7": true,
-      "8": false
+      "ch1": true,
+      "ch2": false,
+      "ch3": true,
+      "ch4": false,
+      "ch5": true,
+      "ch6": false,
+      "ch7": true,
+      "ch8": false
     },
     "differential": [
       {
-        "left": 2,
-        "right": 1,
+        "left": "ch2",
+        "right": "ch1",
         "inverse": true
       },
       {
-        "left": 4,
-        "right": 3,
+        "left": "ch4",
+        "right": "ch3",
         "inverse": false
       }
     ],
@@ -81,23 +81,23 @@
       {
         "channels": [
           {
-            "id": 1,
+            "id": "ch1",
             "value": 0.2
           },
           {
-            "id": 2,
+            "id": "ch2",
             "value": 0.2
           },
           {
-            "id": 3,
+            "id": "ch3",
             "value": 0.4
           },
           {
-            "id": 4,
+            "id": "ch4",
             "value": 0.4
           }
         ],
-        "target": 7
+        "target": "ch7"
       }
     ]
   }

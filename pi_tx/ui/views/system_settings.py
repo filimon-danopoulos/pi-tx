@@ -421,7 +421,7 @@ class ValueStoreTab(MDBoxLayout, MDTabsBase):
                 control_name = value_store.get_control_name(ch)
                 self._table_data.append(
                     (
-                        str(ch),  # Id column (first)
+                        f"ch{ch}",  # Id column (first) - now uses chX format
                         device_name,  # Device column
                         control_name,  # Control column
                         ch_type,  # Type column
