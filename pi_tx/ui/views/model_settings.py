@@ -233,6 +233,7 @@ class ModelSettingsView(MDBoxLayout):
         self._current_model: Model | None = None
         self._raw_data = {}
         self._data_table = None
+        self._table_data = []
         self._current_model_name = "No Model Selected"
 
     def set_model(self, name: str):
@@ -270,18 +271,59 @@ class ModelSettingsView(MDBoxLayout):
         # Clear all widgets in the channels tab
         self._channels_tab.clear_widgets()
 
-        # Create channel mappings data table
-        if self._current_model.channels:
-            self._create_channels_table()
+        # Always create the channels table (will show placeholder if no data)
+        self._create_channels_table()
 
     def _create_channels_table(self):
         """Create and display the channels data table."""
+        # Prepare table data
+        self._table_data = []
+        self._update_table_data()
+
+        # Create data table with dynamic sizing based on configured channels
+        num_rows = len(self._table_data)
+        # Use a reasonable limit for visible rows - max 15 on 480px screen
+        visible_rows = min(num_rows, 15)
+
+        self._data_table = MDDataTable(
+            use_pagination=False,
+            rows_num=visible_rows,  # Dynamic based on actual data
+            column_data=[
+                ("Channel", dp(20)),
+                ("Type", dp(30)),
+                ("Device", dp(45)),
+                ("Control", dp(35)),
+                ("Code", dp(20)),
+            ],
+            row_data=self._table_data,
+            sorted_on="Channel",
+            sorted_order="ASC",
+        )
+
+        # Add table to channels tab
+        self._channels_tab.add_widget(self._data_table)
+
+    def _update_table_data(self):
+        """Update the table data with current model channel configuration."""
+        self._table_data.clear()
+
+        if not self._current_model or not self._current_model.channels:
+            # If no model or channels, show placeholder message
+            self._table_data.append(
+                (
+                    "-",
+                    "-",
+                    "-",
+                    "-",
+                    "-",
+                )
+            )
+            return
+
         # Load stick mapping to get current device names
         stick_mapping = self._load_stick_mapping()
 
-        # Prepare row data for the table
-        row_data = []
-
+        # Add all configured channels
         for ch_id in sorted(self._current_model.channels.keys()):
             channel = self._current_model.channels[ch_id]
 
@@ -305,9 +347,9 @@ class ModelSettingsView(MDBoxLayout):
             control_display = f"Code {channel.control_code}"
 
             # Add row to table data
-            row_data.append(
+            self._table_data.append(
                 (
-                    f"ch{channel.channel_id}",  # Channel column - now uses chX format
+                    f"ch{channel.channel_id}",  # Channel column - uses chX format
                     channel.control_type.title(),
                     device_display,
                     control_display,
@@ -315,23 +357,11 @@ class ModelSettingsView(MDBoxLayout):
                 )
             )
 
-        # Create the data table
-        self._data_table = MDDataTable(
-            use_pagination=False,
-            column_data=[
-                ("Channel", dp(25)),
-                ("Type", dp(30)),
-                ("Device", dp(45)),
-                ("Control", dp(35)),
-                ("Code", dp(20)),
-            ],
-            row_data=row_data,
-            sorted_on="Channel",
-            sorted_order="ASC",
-        )
-
-        # Add table to channels tab
-        self._channels_tab.add_widget(self._data_table)
+    def _refresh_table(self, *args):
+        """Refresh the table data and update display."""
+        if hasattr(self, "_data_table") and self._data_table:
+            self._update_table_data()
+            self._data_table.row_data = self._table_data
 
     def _load_stick_mapping(self):
         """Load stick mapping from JSON file."""
