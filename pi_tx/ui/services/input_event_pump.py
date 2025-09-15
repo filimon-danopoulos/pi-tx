@@ -1,5 +1,6 @@
 from __future__ import annotations
 from typing import Callable, Dict, Iterable, Tuple
+from ...domain.value_store import value_store
 
 
 class InputEventPump:
@@ -34,7 +35,9 @@ class InputEventPump:
         if not last:
             return
         try:
+            # Update both channel_store and value_store
             self._set_many(last)
+            value_store.set_many(last)
         except Exception as e:  # pragma: no cover
             print(f"InputEventPump: failed applying events: {e}")
 
