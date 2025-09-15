@@ -9,6 +9,7 @@ from kivymd.uix.dialog import MDDialog
 from kivymd.uix.button import MDFlatButton, MDRaisedButton, MDIconButton
 from kivymd.uix.textfield import MDTextField
 from kivymd.uix.tab import MDTabs, MDTabsBase
+from kivymd.uix.datatables import MDDataTable
 from kivy.metrics import dp
 import uuid
 import json
@@ -16,6 +17,7 @@ import os
 from pathlib import Path
 
 from ..components.model_topbar import ModelTopBar
+from ...domain.value_store import value_store
 
 
 class ModelsTab(MDBoxLayout, MDTabsBase):
@@ -345,6 +347,106 @@ class ModelsTab(MDBoxLayout, MDTabsBase):
         return idx
 
 
+class ValueStoreTab(MDBoxLayout, MDTabsBase):
+    """Tab for viewing value store data in read-only mode."""
+
+    # Required properties for MDTabsBase
+    icon = "table"
+    title = "System Values"
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.orientation = "vertical"
+        self.spacing = 0
+        self.padding = 0
+        # Ensure tab fills available space
+        self.size_hint = (1, 1)
+
+        self._data_table = None
+        self._table_data = []
+
+        # Create the table immediately
+        self._create_data_table()
+
+    def _create_data_table(self):
+        """Create the data table as the only content."""
+        # Prepare table data
+        self._table_data = []
+        self._update_table_data()
+
+        # Create data table with dynamic sizing based on configured channels
+        num_rows = len(self._table_data)
+        # Use a reasonable limit for visible rows - max 15 on 480px screen
+        visible_rows = min(num_rows, 15)
+
+        self._data_table = MDDataTable(
+            use_pagination=False,
+            rows_num=visible_rows,  # Dynamic based on actual data
+            column_data=[
+                ("Id", dp(15)),
+                ("Device", dp(40)),
+                ("Control", dp(35)),
+                ("Type", dp(35)),
+                ("Reversed", dp(25)),
+            ],
+            row_data=self._table_data,
+        )
+
+        # Add table directly to the tab (no card wrapper)
+        self.add_widget(self._data_table)
+
+    def on_size(self, instance, size):
+        """Called when tab size changes (e.g., when becoming active)."""
+        # Tab size changed - could be used for responsive behavior
+        pass
+
+    def _update_table_data(self):
+        """Update the table data with current value store state."""
+        self._table_data.clear()
+
+        # Only show channels that have some configuration or non-default values
+        for ch in range(1, value_store.size() + 1):
+            ch_type = value_store.get_channel_type(ch)
+            is_reversed = value_store.is_reversed(ch)
+
+            # Skip channels with all default values (unipolar, not reversed)
+            has_config = (
+                ch_type != "unipolar"  # Non-default channel type
+                or is_reversed  # Channel is reversed
+            )
+
+            # Only add channels that have some meaningful configuration
+            if has_config:
+                device_name = value_store.get_device_name(ch)
+                control_name = value_store.get_control_name(ch)
+                self._table_data.append(
+                    (
+                        str(ch),  # Id column (first)
+                        device_name,  # Device column
+                        control_name,  # Control column
+                        ch_type,  # Type column
+                        "Yes" if is_reversed else "No",  # Reversed column
+                    )
+                )
+
+        # If no channels have configuration, show a placeholder message
+        if not self._table_data:
+            self._table_data.append(
+                (
+                    "-",
+                    "No configured channels",
+                    "-",
+                    "-",
+                    "-",
+                )
+            )
+
+    def _refresh_table(self, *args):
+        """Refresh the table data and update display."""
+        self._update_table_data()
+        self._data_table.row_data = self._table_data
+
+
 class GeneralTab(MDBoxLayout, MDTabsBase):
     """Tab for general system settings."""
 
@@ -374,21 +476,25 @@ class SystemSettingsView(MDBoxLayout):
     def __init__(self, app=None, **kwargs):
         super().__init__(orientation="vertical", padding=0, spacing=0, **kwargs)
         self.app = app
+        # Ensure this view fills available space
+        self.size_hint = (1, 1)
 
         # Add custom topbar
         self._topbar = ModelTopBar()
         self._topbar.set_model_name("System Settings")
         self.add_widget(self._topbar)
 
-        # Create tabs
-        self._tabs = MDTabs()
+        # Create tabs with explicit sizing
+        self._tabs = MDTabs(size_hint=(1, 1))
 
         # Create tab instances
         self._models_tab = ModelsTab(app=app)
+        self._value_store_tab = ValueStoreTab()
         self._general_tab = GeneralTab()
 
         # Add tabs to the tab widget
         self._tabs.add_widget(self._models_tab)
+        self._tabs.add_widget(self._value_store_tab)
         self._tabs.add_widget(self._general_tab)
 
         # Add tabs to main container

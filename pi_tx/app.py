@@ -1,5 +1,10 @@
-from .input.controls import InputController
+# Configure Kivy window size for 800x480 screen BEFORE importing any Kivy modules
 from kivy.config import Config
+Config.set('graphics', 'width', '800')
+Config.set('graphics', 'height', '480')
+Config.set('graphics', 'resizable', '0')  # Disable resizing for embedded display
+
+from .input.controls import InputController
 import os, traceback
 from .domain.channel_store import channel_store
 

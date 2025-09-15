@@ -64,7 +64,7 @@ class PiTxApp(MDApp):
         Clock.schedule_interval(self._poll_store_and_refresh, 1.0 / 30.0)
         screen.add_widget(content_root)
         screen_manager.add_widget(screen)
-        
+
         return screen_manager
 
     def refresh_models(self):
@@ -73,7 +73,7 @@ class PiTxApp(MDApp):
             self._autoload_last_model()
         # Update system settings model list
         try:
-            if hasattr(self, 'system_settings_view') and self.system_settings_view:
+            if hasattr(self, "system_settings_view") and self.system_settings_view:
                 self.system_settings_view.refresh_models()
         except Exception:
             pass
@@ -94,7 +94,7 @@ class PiTxApp(MDApp):
     def select_model(self, model_name: str):
         if self._selecting_model:
             return  # Prevent recursion
-            
+
         self._selecting_model = True
         try:
             if not model_name:
@@ -108,7 +108,7 @@ class PiTxApp(MDApp):
                     self.channels_view.set_model_name("")
                 self.dispatch("on_model_selected", "")
                 return
-                
+
             model, mapping = self._model_selector.apply_selection(model_name)
             self._current_model = model
             self.selected_model = model.name
