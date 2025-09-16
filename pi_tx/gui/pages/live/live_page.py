@@ -1,42 +1,40 @@
 from __future__ import annotations
 
 from kivymd.uix.boxlayout import MDBoxLayout
-from kivymd.uix.label import MDLabel
-from kivy.uix.scrollview import ScrollView
-from kivy.metrics import dp
+from kivymd.uix.tab import MDTabs
 
-from ...components.model_topbar import ModelTopBar
-from .components.channel_panel import ChannelPanel
+from .components.channels_tab import ChannelsTab
 
 
 class LivePage(MDBoxLayout):
     """Live page for real-time channel control and monitoring.
 
-    Provides a `channel_panel` attribute for external controllers (e.g. model
-    selection, store updates). Kept lightweight so future UI (filters, search,
-    per-channel tools) can be added above the scroll view.
+    Features:
+      - Channels tab with existing channel panel UI
+      - Ready for additional tabs in the future
     """
 
     def __init__(self, **kwargs):
         super().__init__(orientation="vertical", **kwargs)
 
-        # Add custom topbar
-        self._topbar = ModelTopBar()
-        self.add_widget(self._topbar)
+        # Create tabs with explicit sizing
+        self._tabs = MDTabs(size_hint=(1, 1))
 
-        # Channel panel in scroll view
-        self.channel_panel = ChannelPanel()
-        scroll = ScrollView()
-        scroll.add_widget(self.channel_panel)
-        self.add_widget(scroll)
+        # Create the channels tab with the existing channel panel
+        self._channels_tab = ChannelsTab()
 
-    def set_model_name(self, model_name: str):
-        """Update the title to show the current model name."""
-        if model_name:
-            self._topbar.set_model_name(f"Model: {model_name}")
-        else:
-            self._topbar.set_model_name("No Model Selected")
+        # Add tabs to the tab widget
+        self._tabs.add_widget(self._channels_tab)
 
-    def set_values(self, snapshot: dict):  # convenience pass-through
-        if self.channel_panel:
-            self.channel_panel.update_values(snapshot)
+        # Add tabs to main container
+        self.add_widget(self._tabs)
+
+    @property
+    def channel_panel(self):
+        """Provide access to the channel panel for backwards compatibility."""
+        return self._channels_tab.channel_panel if self._channels_tab else None
+
+    def set_values(self, snapshot: dict):
+        """Update channel values - pass through to the channels tab."""
+        if self._channels_tab:
+            self._channels_tab.update_values(snapshot)

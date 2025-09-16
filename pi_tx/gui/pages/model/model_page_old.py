@@ -6,7 +6,6 @@ from kivymd.uix.tab import MDTabs
 
 from ...services.model_manager import ModelManager
 from ....domain.model_json import Model
-from ...components.model_topbar import ModelTopBar
 from .components.channels_tab import ChannelsTab
 from .components.settings_tab import SettingsTab
 
@@ -201,10 +200,6 @@ class ModelPage(MDBoxLayout):
     def __init__(self, **kwargs):
         super().__init__(orientation="vertical", padding=0, spacing=0, **kwargs)
 
-        # Add custom topbar
-        self._topbar = ModelTopBar()
-        self.add_widget(self._topbar)
-
         # Create tabs
         self._tabs = MDTabs()
 
@@ -237,9 +232,6 @@ class ModelPage(MDBoxLayout):
 
             self._current_model_name = f"Model: {name}"
 
-            # Update topbar
-            self._topbar.set_model_name(self._current_model_name)
-
             # Update bind button text in settings tab
             self._settings_tab._update_bind_button_text()
 
@@ -251,7 +243,6 @@ class ModelPage(MDBoxLayout):
             self._refresh_content()
         except Exception as e:
             self._current_model_name = "Error Loading Model"
-            self._topbar.set_model_name(self._current_model_name)
             self._show_error(f"Error loading model: {str(e)}")
 
     def _refresh_content(self):

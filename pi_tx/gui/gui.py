@@ -111,8 +111,6 @@ class PiTxApp(MDApp):
                 self.model_mapping = {}
                 if hasattr(self, "model_settings_view") and self.model_settings_view:
                     self.model_settings_view.title_label.text = "No Model Selected"
-                if hasattr(self, "channels_view") and self.channels_view:
-                    self.channels_view.set_model_name("")
                 self.dispatch("on_model_selected", "")
                 return
 
@@ -122,8 +120,6 @@ class PiTxApp(MDApp):
             self.model_mapping = {"name": model.name, "channels": mapping}
             if hasattr(self, "model_settings_view") and self.model_settings_view:
                 self.model_settings_view.set_model(model_name)
-            if hasattr(self, "channels_view") and self.channels_view:
-                self.channels_view.set_model_name(model_name)
             self.dispatch("on_model_selected", model_name)
         finally:
             self._selecting_model = False
