@@ -27,6 +27,7 @@ class ValueStore:
         self._raw: List[float] = [0.0] * size
         self._derived: List[float] = [0.0] * size
         self._reverse_flags: List[bool] = [False] * size
+        self._channel_types: List[str] = ["unipolar"] * size  # Missing initialization
         self._channel_values: Dict[int, Dict[str, Any]] = (
             {}
         )  # Channel value definitions
