@@ -5,12 +5,12 @@ from kivymd.uix.label import MDLabel
 from kivy.uix.scrollview import ScrollView
 from kivy.metrics import dp
 
-from ..components.channel_panel import ChannelPanel
-from ..components.model_topbar import ModelTopBar
+from ...components.model_topbar import ModelTopBar
+from .components.channel_panel import ChannelPanel
 
 
-class ChannelsView(MDBoxLayout):
-    """Container view for the Channels page (scrollable channel panel).
+class LivePage(MDBoxLayout):
+    """Live page for real-time channel control and monitoring.
 
     Provides a `channel_panel` attribute for external controllers (e.g. model
     selection, store updates). Kept lightweight so future UI (filters, search,

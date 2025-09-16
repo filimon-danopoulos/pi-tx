@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from pi_tx.ui.services.model_selection import ModelSelectionController
+from pi_tx.gui.services.model_selection import ModelSelectionController
 
 
 class FakeModel:

@@ -12,7 +12,7 @@ from ..input.controls import InputController
 from .services.model_manager import ModelManager, Model
 from .services.model_selection import ModelSelectionController
 from .services.input_event_pump import InputEventPump
-from .components.channel_panel import ChannelPanel
+from .pages.live.components.channel_panel import ChannelPanel
 from .components.navigation_rail import MainNavigationRail
 
 

@@ -1,23 +1,14 @@
 from __future__ import annotations
 
+from kivy.uix.screenmanager import Screen
 from kivymd.uix.boxlayout import MDBoxLayout
-from kivymd.uix.card import MDCard
-from kivymd.uix.label import MDLabel
-from kivymd.uix.scrollview import MDScrollView
-from kivymd.uix.list import MDList, OneLineListItem, TwoLineListItem, ThreeLineListItem
-from kivymd.uix.datatables import MDDataTable
-from kivymd.uix.tab import MDTabs, MDTabsBase
-from kivymd.uix.button import MDRaisedButton
-from kivy.metrics import dp
-from kivy.clock import Clock
-import threading
-from datetime import datetime
-import json
+from kivymd.uix.tab import MDTabs
 
-from ..services.model_manager import ModelManager
-from ...domain.model_json import Model
-from ..components.model_topbar import ModelTopBar
-from ...config.settings import STICK_MAPPING_FILE
+from ...services.model_manager import ModelManager
+from ....domain.model_json import Model
+from ...components.model_topbar import ModelTopBar
+from .components.channels_tab import ChannelsTab
+from .components.settings_tab import SettingsTab
 
 
 class ChannelsTab(MDBoxLayout, MDTabsBase):
@@ -114,7 +105,7 @@ class SettingsTab(MDBoxLayout, MDTabsBase):
         """Background worker to handle the bind process."""
         try:
             # Get the UART transmitter from the app
-            from ... import app as app_mod
+            from .... import app as app_mod
 
             uart_sender = getattr(app_mod, "UART_SENDER", None)
 
@@ -193,8 +184,8 @@ class SettingsTab(MDBoxLayout, MDTabsBase):
         self._status_label.theme_text_color = "Secondary"
 
 
-class ModelSettingsView(MDBoxLayout):
-    """Shows detailed contents and settings for the selected model.
+class ModelPage(MDBoxLayout):
+    """Model configuration page showing detailed model settings.
 
     Displays:
       - Basic model information (name, ID, RX number, etc.)

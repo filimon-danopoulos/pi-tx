@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from pi_tx.ui.services.input_event_pump import InputEventPump
+from pi_tx.gui.services.input_event_pump import InputEventPump
 
 
 class FakeInput:

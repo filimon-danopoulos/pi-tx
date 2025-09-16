@@ -3,9 +3,9 @@ from __future__ import annotations
 from kivymd.uix.navigationrail import MDNavigationRail, MDNavigationRailItem
 from kivymd.uix.boxlayout import MDBoxLayout
 
-from ..views.channels import ChannelsView
-from ..views.model_settings import ModelSettingsView
-from ..views.system_settings import SystemSettingsView
+from ..pages.live.live_page import LivePage
+from ..pages.model.model_page import ModelPage
+from ..pages.system.system_page import SystemPage
 
 
 class MainNavigationRail(MDBoxLayout):
@@ -22,9 +22,9 @@ class MainNavigationRail(MDBoxLayout):
         super().__init__(orientation="horizontal", **kwargs)
 
         # Create views first
-        self.channels_view = ChannelsView()
-        self.model_settings_view = ModelSettingsView()
-        self.system_settings_view = SystemSettingsView()
+        self.channels_view = LivePage()
+        self.model_settings_view = ModelPage()
+        self.system_settings_view = SystemPage()
 
         # Store views for easy access
         self._views = {

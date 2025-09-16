@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from pi_tx.ui.services.model_manager import ModelManager
+from pi_tx.gui.services.model_manager import ModelManager
 
 
 class FakeChannelCfg:
@@ -59,7 +59,7 @@ def test_model_manager_load_and_apply(monkeypatch, tmp_path):
     mm = ModelManager(models_dir=tmp_path, last_model_file=tmp_path / "last.txt")
     mm._repo = repo  # type: ignore[attr-defined]
 
-    import pi_tx.ui.services.model_manager as mm_mod
+    import pi_tx.gui.services.model_manager as mm_mod
 
     monkeypatch.setattr(
         mm_mod.channel_store, "configure_channel_types", fake_configure_channel_types

@@ -11,7 +11,7 @@ from .domain.channel_store import channel_store
 UART_SENDER = None
 UART_INIT_ERROR = None  # store last init exception string
 from .input.controls import InputController
-from .ui.gui import create_gui
+from .gui.gui import create_gui
 
 
 def run():

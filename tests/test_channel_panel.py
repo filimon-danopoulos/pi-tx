@@ -7,7 +7,7 @@ import pytest
 os.environ.setdefault("KIVY_WINDOW", "mock")
 
 try:
-    from pi_tx.ui.components.channel_panel import ChannelPanel
+    from pi_tx.gui.pages.live.components.channel_panel import ChannelPanel
 except (
     BaseException
 ) as e:  # pragma: no cover - includes SystemExit from Kivy window init
