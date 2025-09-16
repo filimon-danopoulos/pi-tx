@@ -5,16 +5,17 @@ Invoke via:
 """
 
 from __future__ import annotations
-import json, uuid
+import uuid
 from typing import Dict, Any, List, Tuple, Optional
 from pi_tx.config.settings import MODELS_DIR, STICK_MAPPING_FILE
+from ..infrastructure.file_cache import load_json, save_json
 
 
 def load_stick_mapping() -> Dict[str, Any]:
     try:
-        with open(STICK_MAPPING_FILE, "r") as f:
-            return json.load(f)
-    except FileNotFoundError:
+        mapping = load_json(str(STICK_MAPPING_FILE))
+        return mapping if mapping else {}
+    except Exception:
         print(f"Error: stick mapping file not found at {STICK_MAPPING_FILE}")
         return {}
 
@@ -28,8 +29,9 @@ def load_existing_model(model_name: str) -> Dict[str, Any]:
     path = MODELS_DIR / f"{model_name}.json"
     if not path.exists():
         return {"name": model_name, "channels": {}, "model_id": uuid.uuid4().hex}
-    with open(path, "r") as f:
-        data = json.load(f)
+    data = load_json(str(path))
+    if not data:
+        return {"name": model_name, "channels": {}, "model_id": uuid.uuid4().hex}
     if "model_id" not in data:
         data["model_id"] = uuid.uuid4().hex
     # legacy: add rx_num if missing
@@ -48,8 +50,7 @@ def save_model_mapping(mapping: Dict[str, Any], model_name: str) -> None:
     if "model_index" not in mapping:
         # Leave at 0; allocation happens on creation flow
         mapping["model_index"] = 0
-    with open(MODELS_DIR / f"{model_name}.json", "w") as f:
-        json.dump(mapping, f, indent=2)
+    save_json(str(MODELS_DIR / f"{model_name}.json"), mapping)
     print(f"Saved model to {MODELS_DIR / (model_name + '.json')}")
 
 
@@ -103,9 +104,8 @@ def allocate_model_index(existing_models: list[str]) -> int:
     for m in existing_models:
         path = MODELS_DIR / f"{m}.json"
         try:
-            with open(path, "r") as f:
-                data = json.load(f)
-            if "model_index" in data:
+            data = load_json(str(path))
+            if data and "model_index" in data:
                 used.add(int(data["model_index"]))
         except Exception:
             continue
@@ -170,9 +170,8 @@ def allocate_rx_num(existing_models: list[str]) -> int:
     for m in existing_models:
         path = MODELS_DIR / f"{m}.json"
         try:
-            with open(path, "r") as f:
-                data = json.load(f)
-            if "rx_num" in data:
+            data = load_json(str(path))
+            if data and "rx_num" in data:
                 used.add(int(data["rx_num"]))
         except Exception:
             continue

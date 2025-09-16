@@ -1,9 +1,10 @@
 from __future__ import annotations
-import threading, select, json, os
+import threading, select, os
 from queue import SimpleQueue
 from datetime import datetime
 from evdev import InputDevice, ecodes
 from pathlib import Path
+from ..infrastructure.file_cache import load_json
 
 
 class InputController:
@@ -27,9 +28,8 @@ class InputController:
         self._event_queue: SimpleQueue[tuple[int, float]] = SimpleQueue()
         self._channel_map: dict[str, dict[int, int]] = {}
         try:
-            with open(mapping_file, "r") as f:
-                self._mappings = json.load(f)
-        except FileNotFoundError:
+            self._mappings = load_json(mapping_file, {})
+        except Exception:
             print(f"Warning: Mapping file {mapping_file} not found")
             self._mappings = {}
         self._mapping_device_keys: list[str] = [

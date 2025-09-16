@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-import json
 import os
 from typing import List
-from dataclasses import asdict
+from pathlib import Path
 
 from .model_json import Model, parse_model_dict
+from ..infrastructure.file_cache import load_json, save_json
 
 MODELS_DIR_DEFAULT = "models"
 
@@ -23,15 +23,18 @@ class ModelRepository:
 
     def load_model(self, name: str) -> Model:
         path = os.path.join(self.models_dir, f"{name}.json")
-        try:
-            with open(path, "r") as f:
-                data = json.load(f)
-        except FileNotFoundError:
+        
+        # Use file cache to load model data
+        data = load_json(path, default_value={})
+        
+        # If file doesn't exist, return default model
+        if not data:
             return Model(name=name, channels={}, processors={})
+        
         return parse_model_dict(name, data)
 
     def save_model(self, model: Model) -> None:
-        """Save a model to JSON file."""
+        """Save a model to JSON file using file cache."""
         os.makedirs(self.models_dir, exist_ok=True)
         path = os.path.join(self.models_dir, f"{model.name}.json")
 
@@ -62,6 +65,6 @@ class ModelRepository:
 
             model_dict["channels"][f"ch{ch_id}"] = channel_dict
 
-        with open(path, "w") as f:
-            json.dump(model_dict, f, indent=2)
+        # Use file cache to save model
+        save_json(path, model_dict)
         print(f"Saved model to {path}")

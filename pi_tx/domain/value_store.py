@@ -4,9 +4,9 @@ Similar to channel_store but simplified to only support reversing functionality.
 Configuration is loaded from system_values.json file.
 """
 
-import json
 import os
 from typing import List, Dict, Any, Mapping
+from ..infrastructure.file_cache import load_json, save_json
 
 
 class ValueStore:
@@ -71,66 +71,54 @@ class ValueStore:
 
     def _load_configuration(self):
         """Load configuration from system_values.json file."""
-        if not os.path.exists(self._config_path):
-            # Create default configuration file
-            self._create_default_config()
-            return
-
         try:
-            with open(self._config_path, "r") as f:
-                config = json.load(f)
+            config = load_json(self._config_path)
+            if config is None:
+                return  # File doesn't exist, keep defaults
 
-            # Load reverse flags
-            reverse_cfg = config.get("reverse", {})
-            for key, val in reverse_cfg.items():
-                try:
-                    # Expect var1 format only
-                    if isinstance(key, str) and key.startswith("var"):
-                        ch_num = int(key[3:])  # Extract number from "var1", "var2", etc.
-                        idx = ch_num - 1
-                    else:
-                        raise ValueError(f"Invalid reverse key format {key}, expected 'var1' format")
-                    
-                    if 0 <= idx < len(self._reverse_flags) and isinstance(val, bool):
-                        self._reverse_flags[idx] = val
-                except (ValueError, TypeError) as e:
-                    print(f"ValueStore: bad reverse entry {key}: {e}")
+            # Load reverse flags - values use var1, var2, etc. format
+            reverse_config = config.get("reverse", {})
+            for key, is_reverse in reverse_config.items():
+                if key.startswith("var"):
+                    try:
+                        # Extract channel number (var1 -> 0, var2 -> 1, etc.)
+                        ch_idx = int(key[3:]) - 1
+                        if 0 <= ch_idx < self._size:
+                            self._reverse_flags[ch_idx] = bool(is_reverse)
+                    except (ValueError, IndexError):
+                        pass  # Skip invalid channel numbers
 
-            # Load channel value definitions
-            values_cfg = config.get("values", {})
-            for key, val in values_cfg.items():
-                try:
-                    # Expect var1 format only
-                    if isinstance(key, str) and key.startswith("var"):
-                        ch_num = int(key[3:])  # Extract number from "var1", "var2", etc.
-                    else:
-                        raise ValueError(f"Invalid values key format {key}, expected 'var1' format")
-                        
-                    if isinstance(val, dict):
-                        self._channel_values[ch_num] = val
-                        # Also extract channel type into _channel_types array
-                        idx = ch_num - 1
-                        if 0 <= idx < len(self._channel_types):
-                            control_type = val.get("control_type", "unipolar")
-                            if control_type in ["bipolar", "unipolar"]:
-                                self._channel_types[idx] = control_type
-                except (ValueError, TypeError) as e:
-                    print(f"ValueStore: bad values entry {key}: {e}")
+            # Load channel values - values use var1, var2, etc. format
+            values_config = config.get("values", {})
+            for key, ch_data in values_config.items():
+                if key.startswith("var"):
+                    try:
+                        # Extract channel number (var1 -> 1, var2 -> 2, etc.)
+                        ch_num = int(key[3:])
+                        if 1 <= ch_num <= self._size:
+                            self._channel_values[ch_num] = ch_data
+                            # Update channel type if specified in the data
+                            if isinstance(ch_data, dict) and "control_type" in ch_data:
+                                ch_type = ch_data["control_type"]
+                                if ch_type in ["bipolar", "unipolar"]:
+                                    idx = ch_num - 1  # Convert to 0-based index
+                                    if 0 <= idx < len(self._channel_types):
+                                        self._channel_types[idx] = ch_type
+                    except ValueError:
+                        pass  # Skip invalid channel numbers
 
-        except (json.JSONDecodeError, IOError) as e:
-            print(f"ValueStore: failed to load config from {self._config_path}: {e}")
+        except Exception as e:
+            print(f"ValueStore: failed to load config: {e}")
+            # Create default configuration if loading fails
             self._create_default_config()
 
     def _load_stick_mapping(self):
         """Load stick mapping from stick_mapping.json file."""
-        if not os.path.exists(self._stick_mapping_path):
-            print(f"ValueStore: stick mapping not found at {self._stick_mapping_path}")
-            return
-
         try:
-            with open(self._stick_mapping_path, "r") as f:
-                self._stick_mapping = json.load(f)
-        except (json.JSONDecodeError, IOError) as e:
+            self._stick_mapping = load_json(self._stick_mapping_path)
+            if self._stick_mapping is None:
+                print(f"ValueStore: stick mapping not found at {self._stick_mapping_path}")
+        except Exception as e:
             print(
                 f"ValueStore: failed to load stick mapping from {self._stick_mapping_path}: {e}"
             )
@@ -140,10 +128,8 @@ class ValueStore:
         default_config = {"reverse": {}, "values": {}}
 
         try:
-            os.makedirs(os.path.dirname(self._config_path), exist_ok=True)
-            with open(self._config_path, "w") as f:
-                json.dump(default_config, f, indent=2)
-        except IOError as e:
+            save_json(self._config_path, default_config)
+        except Exception as e:
             print(f"ValueStore: failed to create default config: {e}")
 
     def save_configuration(self):
@@ -160,10 +146,8 @@ class ValueStore:
             config["values"][f"var{ch_num}"] = ch_data
 
         try:
-            os.makedirs(os.path.dirname(self._config_path), exist_ok=True)
-            with open(self._config_path, "w") as f:
-                json.dump(config, f, indent=2)
-        except IOError as e:
+            save_json(self._config_path, config)
+        except Exception as e:
             print(f"ValueStore: failed to save config: {e}")
 
     def configure_reverse(self, reverse_config: Dict[str, bool]):

@@ -38,8 +38,12 @@ class ChannelPanel(MDBoxLayout):
             self.add_widget(row)
 
     def update_values(self, snapshot: list[float]):
+        # Pre-calculate length to avoid repeated len() calls
+        snapshot_len = len(snapshot)
+        
         for ch, row in self.rows.items():
             idx = ch - 1
-            val = snapshot[idx] if 0 <= idx < len(snapshot) else 0.0
+            val = snapshot[idx] if idx < snapshot_len else 0.0
+            # Only update if value actually changed (avoid unnecessary UI updates)
             if row.bar.value != val:
                 row.update_value(val)

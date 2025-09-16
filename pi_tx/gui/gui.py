@@ -32,6 +32,8 @@ class PiTxApp(MDApp):
         self._current_model: Model | None = None
         self._input_pump = InputEventPump(self.input_controller, channel_store.set_many)
         self._selecting_model = False  # Flag to prevent recursion
+        # Cache last snapshot to avoid redundant UI updates
+        self._last_snapshot = None
         self.register_event_type("on_model_selected")
 
     def on_model_selected(self, model_name: str):
@@ -61,7 +63,8 @@ class PiTxApp(MDApp):
 
         Clock.schedule_once(lambda *_: self.refresh_models(), 0)
         Clock.schedule_interval(self._input_pump.tick, 1.0 / 100.0)
-        Clock.schedule_interval(self._poll_store_and_refresh, 1.0 / 30.0)
+        # Reduced from 30 FPS to 20 FPS for UI updates - still smooth but less CPU usage
+        Clock.schedule_interval(self._poll_store_and_refresh, 1.0 / 20.0)
         screen.add_widget(content_root)
         screen_manager.add_widget(screen)
 
@@ -80,8 +83,12 @@ class PiTxApp(MDApp):
 
     def _poll_store_and_refresh(self, *_):
         snap = channel_store.snapshot()
-        if hasattr(self, "channels_view") and self.channel_panel:
-            self.channel_panel.update_values(snap)
+        
+        # Only update UI if snapshot actually changed
+        if snap != self._last_snapshot:
+            self._last_snapshot = snap[:]  # Store a copy
+            if hasattr(self, "channels_view") and self.channel_panel:
+                self.channel_panel.update_values(snap)
 
     def _autoload_last_model(self):
         try:

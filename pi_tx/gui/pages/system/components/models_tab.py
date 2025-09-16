@@ -9,11 +9,11 @@ from kivymd.uix.button import MDRaisedButton
 from kivymd.uix.tab import MDTabsBase
 from kivy.metrics import dp
 import uuid
-import json
 from pathlib import Path
 
 from .dialogs.model_create_dialog import ModelCreateDialog
 from .dialogs.model_remove_dialog import ModelRemoveDialog
+from .....infrastructure.file_cache import load_json, save_json
 
 
 class ModelsTab(MDBoxLayout, MDTabsBase):
@@ -224,8 +224,7 @@ class ModelsTab(MDBoxLayout, MDTabsBase):
             models_dir.mkdir(exist_ok=True)
             model_file = models_dir / f"{model_name}.json"
 
-            with open(model_file, "w") as f:
-                json.dump(model_data, f, indent=2)
+            save_json(str(model_file), model_data)
 
             # Refresh the app's model list and UI
             self.app.refresh_models()
@@ -248,9 +247,8 @@ class ModelsTab(MDBoxLayout, MDTabsBase):
         if models_dir.exists():
             for model_file in models_dir.glob("*.json"):
                 try:
-                    with open(model_file, "r") as f:
-                        data = json.load(f)
-                    if "rx_num" in data:
+                    data = load_json(str(model_file))
+                    if data and "rx_num" in data:
                         used.add(int(data["rx_num"]))
                 except Exception:
                     continue
@@ -267,9 +265,8 @@ class ModelsTab(MDBoxLayout, MDTabsBase):
         if models_dir.exists():
             for model_file in models_dir.glob("*.json"):
                 try:
-                    with open(model_file, "r") as f:
-                        data = json.load(f)
-                    if "model_index" in data:
+                    data = load_json(str(model_file))
+                    if data and "model_index" in data:
                         used.add(int(data["model_index"]))
                 except Exception:
                     continue

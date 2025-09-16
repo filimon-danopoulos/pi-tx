@@ -5,13 +5,16 @@ from kivymd.uix.label import MDLabel
 from kivymd.uix.datatables import MDDataTable
 from kivymd.uix.tab import MDTabsBase
 from kivy.metrics import dp
-import json
 
 from .....config.settings import STICK_MAPPING_FILE
+from .....infrastructure.file_cache import load_json
 
 
 class ChannelsTab(MDBoxLayout, MDTabsBase):
     """Tab containing the channels data table."""
+    
+    # Pre-compute common dp values for better performance
+    _column_widths = [dp(20), dp(35), dp(35), dp(25), dp(20)]
 
     def __init__(self, **kwargs):
         super().__init__(orientation="vertical", spacing=0, **kwargs)
@@ -61,11 +64,11 @@ class ChannelsTab(MDBoxLayout, MDTabsBase):
             use_pagination=False,
             rows_num=visible_rows,  # Dynamic based on actual data
             column_data=[
-                ("Channel", dp(20)),
-                ("Type", dp(35)),
-                ("Device", dp(35)),
-                ("Control", dp(25)),
-                ("Code", dp(20)),
+                ("Channel", self._column_widths[0]),
+                ("Type", self._column_widths[1]),
+                ("Device", self._column_widths[2]),
+                ("Control", self._column_widths[3]),
+                ("Code", self._column_widths[4]),
             ],
             row_data=self._table_data,
             sorted_on="Channel",
@@ -81,25 +84,21 @@ class ChannelsTab(MDBoxLayout, MDTabsBase):
 
         if not self._current_model or not self._current_model.channels:
             # If no model or channels, show placeholder message
-            self._table_data.append(
-                (
-                    "-",
-                    "-",
-                    "-",
-                    "-",
-                    "-",
-                )
-            )
+            self._table_data.append(("-", "-", "-", "-", "-"))
             return
 
-        # Load stick mapping to get current device names
+        # Load stick mapping once (cached)
         stick_mapping = self._load_stick_mapping()
+        
+        # Pre-allocate list for better performance
+        channels = self._current_model.channels
+        table_rows = []
 
-        # Add all configured channels
-        for ch_id in sorted(self._current_model.channels.keys()):
-            channel = self._current_model.channels[ch_id]
+        # Process all channels in one pass
+        for ch_id in sorted(channels.keys()):
+            channel = channels[ch_id]
 
-            # Format device info using stick_mapping.json as source of truth
+            # Format device info using cached stick_mapping
             if not channel.device_path:
                 device_display = "Virtual"
             else:
@@ -115,19 +114,23 @@ class ChannelsTab(MDBoxLayout, MDTabsBase):
                         else channel.device_path
                     )
 
-            # Format control info - use control code directly
+            # Pre-format strings to avoid repeated operations
+            channel_name = f"ch{channel.channel_id}"
+            control_type = channel.control_type.title()
             control_display = f"Code {channel.control_code}"
+            control_code_str = str(channel.control_code)
 
-            # Add row to table data
-            self._table_data.append(
-                (
-                    f"ch{channel.channel_id}",  # Channel column - uses chX format
-                    channel.control_type.title(),
-                    device_display,
-                    control_display,
-                    str(channel.control_code),
-                )
-            )
+            # Add row to batch
+            table_rows.append((
+                channel_name,
+                control_type,
+                device_display,
+                control_display,
+                control_code_str,
+            ))
+
+        # Batch assign all rows at once
+        self._table_data.extend(table_rows)
 
     def _refresh_table(self, *args):
         """Refresh the table data and update display."""
@@ -136,12 +139,8 @@ class ChannelsTab(MDBoxLayout, MDTabsBase):
             self._data_table.row_data = self._table_data
 
     def _load_stick_mapping(self):
-        """Load stick mapping from JSON file."""
-        try:
-            with open(STICK_MAPPING_FILE, "r") as f:
-                return json.load(f)
-        except (FileNotFoundError, json.JSONDecodeError):
-            return {}
+        """Load stick mapping from JSON file using file cache."""
+        return load_json(STICK_MAPPING_FILE, default_value={})
 
     def _show_error(self, error_msg: str):
         """Show an error message."""

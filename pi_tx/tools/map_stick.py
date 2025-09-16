@@ -5,10 +5,11 @@ Invoke via:
 """
 
 from __future__ import annotations
-import json, time, os
+import time, os
 from typing import Dict, Any, Optional, Tuple
 from evdev import InputDevice, ecodes, list_devices
 from pi_tx.config.settings import STICK_MAPPING_FILE, MAPPINGS_DIR
+from ..infrastructure.file_cache import load_json, save_json
 
 
 def is_joystick(dev: InputDevice) -> bool:
@@ -76,16 +77,15 @@ def monitor_inputs(
 
 def load_existing_mapping() -> Dict[str, Any]:
     try:
-        with open(STICK_MAPPING_FILE, "r") as f:
-            return json.load(f)
-    except FileNotFoundError:
+        mapping = load_json(str(STICK_MAPPING_FILE))
+        return mapping if mapping else {}
+    except Exception:
         return {}
 
 
 def save_mapping(mapping: Dict[str, Any]):
     MAPPINGS_DIR.mkdir(parents=True, exist_ok=True)
-    with open(STICK_MAPPING_FILE, "w") as f:
-        json.dump(mapping, f, indent=2)
+    save_json(str(STICK_MAPPING_FILE), mapping)
     print(f"Saved mapping to {STICK_MAPPING_FILE}")
 
 

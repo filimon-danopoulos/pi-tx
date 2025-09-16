@@ -35,7 +35,8 @@ class InputEventPump:
         if not last:
             return
         try:
-            # Update both channel_store and value_store
+            # Update both channel_store and value_store in batch
+            # (both stores already implement efficient batching internally)
             self._set_many(last)
             value_store.set_many(last)
         except Exception as e:  # pragma: no cover
