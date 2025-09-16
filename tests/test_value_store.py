@@ -36,8 +36,8 @@ class TestValueStore:
         """Test reversing for unipolar channels."""
         with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
             json.dump({
-                "reverse": {"1": True}, 
-                "channel_types": {"1": "unipolar"}
+                "reverse": {"var1": True}, 
+                "values": {"var1": {"control_type": "unipolar"}}
             }, f)
             config_path = f.name
         
@@ -56,8 +56,8 @@ class TestValueStore:
         """Test reversing for bipolar channels."""
         with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
             json.dump({
-                "reverse": {"2": True}, 
-                "channel_types": {"2": "bipolar"}
+                "reverse": {"var2": True}, 
+                "values": {"var2": {"control_type": "bipolar"}}
             }, f)
             config_path = f.name
         
@@ -108,8 +108,8 @@ class TestValueStore:
         """Test snapshot functionality."""
         with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
             json.dump({
-                "reverse": {"1": True}, 
-                "channel_types": {"1": "unipolar"}
+                "reverse": {"var1": True}, 
+                "values": {"var1": {"control_type": "unipolar"}}
             }, f)
             config_path = f.name
         

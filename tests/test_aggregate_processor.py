@@ -8,11 +8,11 @@ def test_aggregate_basic_sum_and_clamp():
             "aggregate": [
                 {
                     "channels": [
-                        {"id": 1, "value": 0.4},
-                        {"id": 2, "value": 0.1},
-                        {"id": 3, "value": 0.5},
+                        {"id": "ch1", "value": 0.4},
+                        {"id": "ch2", "value": 0.1},
+                        {"id": "ch3", "value": 0.5},
                     ],
-                    "target": 6,
+                    "target": "ch6",
                 }
             ]
         }
@@ -27,7 +27,7 @@ def test_aggregate_no_target_uses_first_source_as_target():
     cs.configure_processors(
         {
             "aggregate": [
-                {"channels": [{"id": 1, "value": 0.25}, {"id": 2, "value": 0.25}]}
+                {"channels": [{"id": "ch1", "value": 0.25}, {"id": "ch2", "value": 0.25}]}
             ]
         }
     )
@@ -44,9 +44,9 @@ def test_aggregate_sum_clamps_only_final_result():
             "aggregate": [
                 {
                     "channels": [
-                        {"id": 1, "value": 1.0},
-                        {"id": 2, "value": 1.0},
-                        {"id": 3, "value": 1.0},
+                        {"id": "ch1", "value": 1.0},
+                        {"id": "ch2", "value": 1.0},
+                        {"id": "ch3", "value": 1.0},
                     ]
                 }
             ]

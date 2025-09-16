@@ -108,6 +108,12 @@ class ValueStore:
                         
                     if isinstance(val, dict):
                         self._channel_values[ch_num] = val
+                        # Also extract channel type into _channel_types array
+                        idx = ch_num - 1
+                        if 0 <= idx < len(self._channel_types):
+                            control_type = val.get("control_type", "unipolar")
+                            if control_type in ["bipolar", "unipolar"]:
+                                self._channel_types[idx] = control_type
                 except (ValueError, TypeError) as e:
                     print(f"ValueStore: bad values entry {key}: {e}")
 
@@ -225,6 +231,10 @@ class ValueStore:
         idx = channel - 1
         if 0 <= idx < len(self._channel_types) and ch_type in ["bipolar", "unipolar"]:
             self._channel_types[idx] = ch_type
+            # Also update the _channel_values dictionary so it gets saved
+            if channel not in self._channel_values:
+                self._channel_values[channel] = {}
+            self._channel_values[channel]["control_type"] = ch_type
             self._recompute()
 
     def size(self) -> int:
@@ -317,8 +327,9 @@ class ValueStore:
         Returns:
             Channel type ("bipolar" or "unipolar")
         """
-        if channel in self._channel_values:
-            return self._channel_values[channel].get("control_type", "unipolar")
+        idx = channel - 1
+        if 0 <= idx < len(self._channel_types):
+            return self._channel_types[idx]
         return "unipolar"
 
     def get_device_name(self, channel: int) -> str:

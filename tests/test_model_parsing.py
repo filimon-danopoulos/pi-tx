@@ -10,7 +10,7 @@ def test_parse_model_dict_basic_and_channel_skip(tmp_path):
         "rx_num": 20,  # will be clamped to 15
         "model_index": "3",
         "channels": {
-            "1": {
+            "ch1": {
                 "control_type": "unipolar",
                 "device_path": "/dev/js0",
                 "control_code": 0,
@@ -19,7 +19,7 @@ def test_parse_model_dict_basic_and_channel_skip(tmp_path):
                 "control_type": "bipolar",
                 "device_path": "x",
             },  # missing control_code -> skipped
-            "2": {"type": "bipolar", "device_path": "/dev/js0", "control_code": "X"},
+            "ch2": {"type": "bipolar", "device_path": "/dev/js0", "control_code": "X"},
         },
         "processors": {"aggregate": [{"channels": [1, 2], "target": 2}]},
     }
@@ -38,7 +38,7 @@ def test_model_repository_list_and_load(tmp_path):
     models_dir.mkdir()
     cfg = {
         "channels": {
-            "1": {"control_type": "unipolar", "device_path": "", "control_code": 0}
+            "ch1": {"control_type": "unipolar", "device_path": "", "control_code": 0}
         },
         "processors": {},
     }
