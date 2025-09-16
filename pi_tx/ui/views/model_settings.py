@@ -290,9 +290,9 @@ class ModelSettingsView(MDBoxLayout):
             rows_num=visible_rows,  # Dynamic based on actual data
             column_data=[
                 ("Channel", dp(20)),
-                ("Type", dp(30)),
-                ("Device", dp(45)),
-                ("Control", dp(35)),
+                ("Type", dp(35)),
+                ("Device", dp(35)),
+                ("Control", dp(25)),
                 ("Code", dp(20)),
             ],
             row_data=self._table_data,
