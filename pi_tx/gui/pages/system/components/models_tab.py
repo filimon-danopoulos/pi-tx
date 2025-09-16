@@ -1,11 +1,9 @@
 from __future__ import annotations
 
 from kivymd.uix.boxlayout import MDBoxLayout
-from kivymd.uix.label import MDLabel
-from kivymd.uix.list import OneLineListItem, MDList
-from kivymd.uix.scrollview import MDScrollView
-from kivymd.uix.card import MDCard
-from kivymd.uix.button import MDRaisedButton
+from kivymd.uix.datatables import MDDataTable
+from kivymd.uix.button import MDFloatingActionButton
+from kivymd.uix.floatlayout import MDFloatLayout
 from kivymd.uix.tab import MDTabsBase
 from kivy.metrics import dp
 import uuid
@@ -20,62 +18,118 @@ class ModelsTab(MDBoxLayout, MDTabsBase):
     """Tab for model selection and management."""
 
     def __init__(self, app=None, **kwargs):
-        super().__init__(orientation="vertical", padding=16, spacing=8, **kwargs)
+        super().__init__(orientation="vertical", **kwargs)
         self.title = "Models"
         self.icon = "folder-multiple"
         self.app = app
+        # Ensure tab fills available space
+        self.size_hint = (1, 1)
+        self.spacing = 0
+        self.padding = 0
 
         # Initialize dialog references
         self.remove_dialog = None
         self.create_dialog = None
 
-        # Button row
-        button_layout = MDBoxLayout(
-            orientation="horizontal",
-            size_hint_y=None,
-            height=dp(48),
-            spacing=8,
-        )
+        # Track selected models
+        self._selected_models = set()
+        self._table_data = []
 
-        # Remove model button
-        self.remove_button = MDRaisedButton(
-            text="Remove Selected",
-            icon="delete",
-            theme_icon_color="Custom",
-            icon_color="white",
-            md_bg_color="red",
-            on_release=self._show_remove_model_dialog,
-            disabled=True,  # Initially disabled until a model is selected
-        )
+        # Create a float layout to contain the table and FAB
+        self._float_layout = MDFloatLayout()
 
-        # Create model button
-        self.create_button = MDRaisedButton(
-            text="Create New",
+        # Create the data table immediately
+        self._create_data_table()
+
+        # Add FAB for adding/removing models
+        self._fab = MDFloatingActionButton(
             icon="plus",
-            theme_icon_color="Custom",
-            icon_color="white",
-            on_release=self._show_create_model_dialog,
+            pos_hint={"center_x": 0.9, "center_y": 0.1},
+            on_release=self._on_fab_pressed,
+        )
+        self._float_layout.add_widget(self._fab)
+
+        # Add the float layout to the main container
+        self.add_widget(self._float_layout)
+
+        # Initialize FAB state
+        self._update_fab_state()
+
+    def _create_data_table(self):
+        """Create the data table as the main content."""
+        # Prepare table data
+        self._table_data = []
+        self._update_table_data()
+
+        # Create data table
+        self._data_table = MDDataTable(
+            use_pagination=False,
+            check=True,  # Enable built-in checkboxes
+            rows_num=50,  # Set high enough to show all models without pagination
+            column_data=[
+                ("Model Name", dp(60)),
+                ("RX Number", dp(25)),
+                ("Model Index", dp(30)),
+                ("Channels", dp(25)),
+            ],
+            row_data=self._table_data,
         )
 
-        button_layout.add_widget(self.remove_button)
-        button_layout.add_widget(MDLabel())  # Spacer
-        button_layout.add_widget(self.create_button)
-        self.add_widget(button_layout)
+        # Bind to row selection and checkbox events
+        self._data_table.bind(on_row_press=self._on_row_selected)
+        self._data_table.bind(on_check_press=self._on_checkbox_press)
 
-        # Model list card
-        model_card = MDCard(
-            orientation="vertical",
-            size_hint_y=1,
-            padding=8,
-            spacing=4,
-            elevation=2,
-        )
+        # Add table to the float layout
+        self._float_layout.add_widget(self._data_table)
 
-        self._model_list = MDList()
-        scroll = MDScrollView()
-        scroll.add_widget(self._model_list)
-        model_card.add_widget(scroll)
-        self.add_widget(model_card)
+    def _update_table_data(self):
+        """Update the table data with current models."""
+        self._table_data.clear()
+
+        if not self.app or not self.app.available_models:
+            # Show placeholder when no models
+            self._table_data.append(
+                (
+                    "No models found",
+                    "-",
+                    "-",
+                    "-",
+                )
+            )
+            return
+
+            # Add each model to the table
+        for model_name in self.app.available_models:
+            try:
+                # Load model data to get details
+                model_file = Path("models") / f"{model_name}.json"
+                if model_file.exists():
+                    model_data = load_json(str(model_file))
+                    rx_num = model_data.get("rx_num", "?")
+                    model_index = model_data.get("model_index", "?")
+                    channels = len(model_data.get("channels", {}))
+                else:
+                    rx_num = "?"
+                    model_index = "?"
+                    channels = "?"
+
+                row_data = (
+                    model_name,
+                    str(rx_num),
+                    str(model_index),
+                    str(channels),
+                )
+                self._table_data.append(row_data)
+
+            except Exception as e:
+                # Fallback for corrupted model files
+                row_data = (
+                    model_name,
+                    "?",
+                    "?",
+                    "?",
+                )
+                self._table_data.append(row_data)
 
     def set_app(self, app):
         """Set the app reference after initialization."""
@@ -85,62 +139,96 @@ class ModelsTab(MDBoxLayout, MDTabsBase):
             app.bind(on_model_selected=self._on_model_changed)
 
     def refresh_models(self):
-        """Refresh the model list display."""
+        """Refresh the model table display."""
         if not self.app:
             return
-
-        self._model_list.clear_widgets()
 
         # Get available models
         if not self.app.available_models:
             self.app.refresh_models()
 
-        # Get currently selected model for highlighting
-        current_model = getattr(self.app, "selected_model", "")
+        # Update table data and refresh display
+        self._update_table_data()
+        self._data_table.row_data = self._table_data
 
-        # Update remove button state based on selection
-        self.remove_button.disabled = not current_model
+        # Clear selection when refreshing
+        self._selected_models.clear()
 
-        for name in self.app.available_models:
-            # Use a proper closure to capture the current name value
-            def create_selection_handler(model_name):
-                def handler(*args):
-                    self.app.select_model(model_name)
+        # Update FAB state after refreshing
+        self._update_fab_state()
 
-                return handler
+    def _on_row_selected(self, instance, row):
+        """Handle row selection in the data table."""
+        # Row selection is now just for display - model activation is separate
+        pass
 
-            # Create list item with visual indication of current selection
-            item = OneLineListItem(text=name, on_release=create_selection_handler(name))
+    def _on_checkbox_press(self, instance, current_row):
+        """Handle checkbox press for model selection."""
+        if not isinstance(current_row, (list, tuple)) or len(current_row) == 0:
+            return
 
-            # Highlight currently selected model
-            if name == current_model:
-                item.theme_text_color = "Custom"
-                item.text_color = item.theme_cls.primary_color
+        display_name = current_row[0]
 
-            self._model_list.add_widget(item)
+        # Skip placeholder rows
+        if display_name == "No models found":
+            return
+
+        # Toggle selection
+        if display_name in self._selected_models:
+            self._selected_models.remove(display_name)
+        else:
+            self._selected_models.add(display_name)
+
+        # Update FAB state
+        self._update_fab_state()
+
+    def _update_fab_state(self):
+        """Update FAB icon and color based on current selection state."""
+        if self._selected_models:
+            # Remove mode - red delete icon
+            self._fab.icon = "delete"
+            self._fab.md_bg_color = (0.9, 0.2, 0.2, 1.0)  # Red
+        else:
+            # Add mode - blue plus icon
+            self._fab.icon = "plus"
+            self._fab.md_bg_color = (0.2, 0.6, 1.0, 1.0)  # Blue
+
+    def _on_fab_pressed(self, *args):
+        """Handle FAB press - either add or remove based on current state."""
+        if self._selected_models:
+            # Remove mode - show confirmation for selected models
+            self._show_remove_model_dialog()
+        else:
+            # Add mode - show create dialog
+            self._show_create_model_dialog()
 
     def _on_model_changed(self, app, model_name):
         """Called when a model is selected to refresh the display."""
         self.refresh_models()
 
+    def _refresh_table(self, *args):
+        """Refresh the table data and update display."""
+        self._update_table_data()
+        self._data_table.row_data = self._table_data
+        # Clear selection when refreshing
+        self._selected_models.clear()
+        self._update_fab_state()
+
     def _show_remove_model_dialog(self, *args):
-        """Show confirmation dialog to remove the selected model."""
-        if (
-            not self.app
-            or not hasattr(self.app, "selected_model")
-            or not self.app.selected_model
-        ):
+        """Show confirmation dialog to remove the selected models."""
+        if not self._selected_models:
             return
 
-        selected_model = self.app.selected_model
+        # For now, handle single selection (can be extended for multiple)
+        selected_model = next(iter(self._selected_models))  # Get first item from set
 
         # Create dialog if it doesn't exist
         if not self.remove_dialog:
             self.remove_dialog = ModelRemoveDialog(
                 on_confirm=self._remove_selected_model,
-                on_cancel=self._close_remove_dialog
+                on_cancel=self._close_remove_dialog,
             )
-        
+
         self.remove_dialog.show_dialog(selected_model)
 
     def _close_remove_dialog(self, *args):
@@ -150,35 +238,40 @@ class ModelsTab(MDBoxLayout, MDTabsBase):
         return True
 
     def _remove_selected_model(self, *args):
-        """Remove the currently selected model."""
-        if (
-            not self.app
-            or not hasattr(self.app, "selected_model")
-            or not self.app.selected_model
-        ):
+        """Remove the selected models."""
+        if not self._selected_models or not self.app:
             self._close_remove_dialog()
             return
 
         try:
-            model_name = self.app.selected_model
-            model_file = Path("models") / f"{model_name}.json"
+            removed_models = self._selected_models.copy()  # Copy before clearing
 
-            if model_file.exists():
-                model_file.unlink()  # Delete the file
+            # Remove all selected models
+            for model_name in self._selected_models:
+                model_file = Path("models") / f"{model_name}.json"
+                if model_file.exists():
+                    model_file.unlink()  # Delete the file
 
-                # Clear current selection
+            # Clear selection after removal
+            self._selected_models.clear()
+
+            # Clear current selection if it was one of the removed models
+            if (
+                hasattr(self.app, "selected_model")
+                and self.app.selected_model in removed_models
+            ):
                 self.app.selected_model = ""
                 self.app._current_model = None
 
-                # Refresh model lists
-                self.app.refresh_models()
-                self.refresh_models()
+            # Refresh model lists
+            self.app.refresh_models()
+            self.refresh_models()
 
-                # Try to auto-load another model if available
-                if self.app.available_models:
-                    # Select the first available model
-                    first_model = self.app.available_models[0]
-                    self.app.select_model(first_model)
+            # Try to auto-load another model if available
+            if self.app.available_models:
+                # Select the first available model
+                first_model = self.app.available_models[0]
+                self.app.select_model(first_model)
 
         except Exception as e:
             print(f"Error removing model: {e}")
@@ -192,13 +285,13 @@ class ModelsTab(MDBoxLayout, MDTabsBase):
             self.create_dialog = ModelCreateDialog(
                 on_confirm=self._save_new_model,
                 on_cancel=self._close_create_dialog,
-                existing_models=self.app.available_models if self.app else []
+                existing_models=self.app.available_models if self.app else [],
             )
-        
+
         # Update existing models list
         if self.app:
             self.create_dialog.update_existing_models(self.app.available_models)
-        
+
         self.create_dialog.show_dialog()
 
     def _close_create_dialog(self, *args):
@@ -237,7 +330,7 @@ class ModelsTab(MDBoxLayout, MDTabsBase):
             print(f"Error saving model: {str(e)}")
             # The dialog will handle displaying this error
             return False
-        
+
         return True
 
     def _allocate_rx_num(self):
