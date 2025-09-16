@@ -6,10 +6,16 @@ from kivymd.uix.list import OneLineListItem, MDList
 from kivymd.uix.scrollview import MDScrollView
 from kivymd.uix.card import MDSeparator, MDCard
 from kivymd.uix.dialog import MDDialog
-from kivymd.uix.button import MDFlatButton, MDRaisedButton, MDIconButton
+from kivymd.uix.button import (
+    MDFlatButton,
+    MDRaisedButton,
+    MDIconButton,
+    MDFloatingActionButton,
+)
 from kivymd.uix.textfield import MDTextField
 from kivymd.uix.tab import MDTabs, MDTabsBase
 from kivymd.uix.datatables import MDDataTable
+from kivymd.uix.floatlayout import MDFloatLayout
 from kivy.metrics import dp
 import uuid
 import json
@@ -364,8 +370,22 @@ class ValueStoreTab(MDBoxLayout, MDTabsBase):
         self._data_table = None
         self._table_data = []
 
+        # Create a float layout to contain the table and FAB
+        self._float_layout = MDFloatLayout()
+
         # Create the table immediately
         self._create_data_table()
+
+        # Add FAB for adding new system values
+        self._fab = MDFloatingActionButton(
+            icon="plus",
+            pos_hint={"center_x": 0.9, "center_y": 0.1},
+            on_release=self._on_fab_pressed,
+        )
+        self._float_layout.add_widget(self._fab)
+
+        # Add the float layout to the main container
+        self.add_widget(self._float_layout)
 
     def _create_data_table(self):
         """Create the data table as the only content."""
@@ -391,8 +411,8 @@ class ValueStoreTab(MDBoxLayout, MDTabsBase):
             row_data=self._table_data,
         )
 
-        # Add table directly to the tab (no card wrapper)
-        self.add_widget(self._data_table)
+        # Add table to the float layout instead of directly to the tab
+        self._float_layout.add_widget(self._data_table)
 
     def on_size(self, instance, size):
         """Called when tab size changes (e.g., when becoming active)."""
@@ -444,6 +464,66 @@ class ValueStoreTab(MDBoxLayout, MDTabsBase):
         """Refresh the table data and update display."""
         self._update_table_data()
         self._data_table.row_data = self._table_data
+
+    def _on_fab_pressed(self, *args):
+        """Handle FAB press to add new system value."""
+        # Create a simple dialog for adding system values
+        if not hasattr(self, "_add_dialog") or not self._add_dialog:
+            # Create text field for channel input
+            self._channel_field = MDTextField(
+                hint_text="Channel number (1-16)",
+                helper_text="Enter a channel number between 1 and 16",
+                helper_text_mode="persistent",
+                size_hint_x=None,
+                width=dp(200),
+            )
+
+            # Create the dialog
+            self._add_dialog = MDDialog(
+                title="Add System Value",
+                type="custom",
+                content_cls=self._channel_field,
+                buttons=[
+                    MDFlatButton(
+                        text="CANCEL",
+                        on_release=lambda *args: self._add_dialog.dismiss(),
+                    ),
+                    MDRaisedButton(text="ADD", on_release=self._add_system_value),
+                ],
+            )
+
+        self._add_dialog.open()
+
+    def _add_system_value(self, *args):
+        """Add a new system value based on user input."""
+        try:
+            channel_text = self._channel_field.text.strip()
+            if not channel_text:
+                print("No channel number entered")
+                return
+
+            channel_num = int(channel_text)
+            if not (1 <= channel_num <= 16):
+                print(f"Invalid channel number: {channel_num}. Must be 1-16")
+                return
+
+            # Add a basic configuration for the channel
+            value_store.set_device_name(channel_num, "Manual Entry")
+            value_store.set_control_name(channel_num, f"Control {channel_num}")
+            value_store.set_channel_type(channel_num, "unipolar")
+
+            # Refresh the table to show the new entry
+            self._refresh_table()
+
+            # Close the dialog
+            self._add_dialog.dismiss()
+
+            print(f"Added system value for channel {channel_num}")
+
+        except ValueError:
+            print(f"Invalid channel number: {self._channel_field.text}")
+        except Exception as e:
+            print(f"Error adding system value: {e}")
 
 
 class GeneralTab(MDBoxLayout, MDTabsBase):
