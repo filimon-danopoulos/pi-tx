@@ -67,6 +67,7 @@ class ChannelStore:
             out[right_i if inv else left_i] = left_val / scale
             out[left_i if inv else right_i] = right_val / scale
         return out
+
     def _aggregate_proc(self, values: List[float]) -> List[float]:
         """Compute configured aggregates.
 
@@ -88,7 +89,11 @@ class ChannelStore:
                     total += abs(out[idx]) * weight
             if total > 1.0:
                 total = 1.0
-            tgt = target if target is not None else (chan_weights[0][0] if chan_weights else None)
+            tgt = (
+                target
+                if target is not None
+                else (chan_weights[0][0] if chan_weights else None)
+            )
             if tgt is not None:
                 t_idx = tgt - 1
                 if 0 <= t_idx < size:
@@ -107,7 +112,9 @@ class ChannelStore:
                     if 0 <= idx < len(self._reverse_flags) and isinstance(val, bool):
                         self._reverse_flags[idx] = val
             except Exception as e:
-                self._log.debug("Bad reverse entry", extra={"key": key, "error": str(e)})
+                self._log.debug(
+                    "Bad reverse entry", extra={"key": key, "error": str(e)}
+                )
         # differential mixes
         diff_cfg = processors_cfg.get("differential")
         if isinstance(diff_cfg, list):
@@ -141,7 +148,11 @@ class ChannelStore:
                     chan_weights: List[tuple[int, float]] = []
                     for entry in ch_entries:
                         if isinstance(entry, dict):
-                            ch_id = entry.get("id") or entry.get("ch") or entry.get("channel")
+                            ch_id = (
+                                entry.get("id")
+                                or entry.get("ch")
+                                or entry.get("channel")
+                            )
                             if ch_id is None:
                                 continue
                             if isinstance(ch_id, str) and ch_id.startswith("ch"):
@@ -177,6 +188,38 @@ class ChannelStore:
                 except Exception:
                     continue
             self._aggregates = agg_parsed
+        # endpoints (min/max clamp per channel) structure:
+        #   "endpoints": { "ch1": {"min": -0.2, "max": 0.9}, ... }
+        ep_cfg = processors_cfg.get("endpoints") or {}
+        if isinstance(ep_cfg, dict):
+            for key, rng in ep_cfg.items():
+                try:
+                    if not (isinstance(key, str) and key.startswith("ch")):
+                        continue
+                    idx = int(key[2:]) - 1
+                    if not (0 <= idx < len(self._endpoint_ranges)):
+                        continue
+                    if isinstance(rng, dict):
+                        mn = rng.get("min")
+                        mx = rng.get("max")
+                        if mn is None or mx is None:
+                            continue
+                        mn_f = float(mn)
+                        mx_f = float(mx)
+                        # Normalize ordering
+                        if mn_f > mx_f:
+                            mn_f, mx_f = mx_f, mn_f
+                        # Clamp to base allowed range based on channel type
+                        base_min, base_max = (-1.0, 1.0)
+                        if self._channel_types[idx] == "unipolar":
+                            base_min, base_max = (0.0, 1.0)
+                        if mn_f < base_min:
+                            mn_f = base_min
+                        if mx_f > base_max:
+                            mx_f = base_max
+                        self._endpoint_ranges[idx] = (mn_f, mx_f)
+                except Exception:
+                    continue
         self._build_pipeline()
 
     def configure_differential_mixes(self, mixes: List[Dict[str, Any]]):

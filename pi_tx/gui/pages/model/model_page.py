@@ -9,6 +9,7 @@ from ...services.model_manager import ModelManager
 from ....domain.model_json import Model
 from .components.channels_tab import ChannelsTab
 from .components.settings_tab import SettingsTab
+from .components.modifiers_tab import ModifiersTab
 
 
 class ModelPage(MDBoxLayout):
@@ -33,10 +34,12 @@ class ModelPage(MDBoxLayout):
 
         # Create tab instances
         self._channels_tab = ChannelsTab()
+        self._modifiers_tab = ModifiersTab()
         self._settings_tab = SettingsTab()
 
         # Add tabs to the tab widget
         self._tabs.add_widget(self._channels_tab)
+        self._tabs.add_widget(self._modifiers_tab)
         self._tabs.add_widget(self._settings_tab)
 
         # Add tabs to main container
@@ -59,6 +62,7 @@ class ModelPage(MDBoxLayout):
 
             # Pass model to tabs
             self._channels_tab.set_model(self._current_model, self._model_manager)
+            self._modifiers_tab.set_model(self._current_model, self._model_manager)
             self._settings_tab.set_model(self._current_model, self._model_manager)
 
             self._refresh_content()
@@ -73,6 +77,8 @@ class ModelPage(MDBoxLayout):
 
         # Refresh the channel data table
         self._channels_tab.refresh_table()
+        if hasattr(self, "_modifiers_tab"):
+            self._modifiers_tab.refresh_table()
 
     def _show_error(self, error_msg: str):
         """Show an error message."""

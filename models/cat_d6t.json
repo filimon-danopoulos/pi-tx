@@ -65,6 +65,12 @@
       "ch7": true,
       "ch8": false
     },
+    "endpoints": {
+      "ch1": {"min": -0.80, "max": 0.90},
+      "ch2": {"min": -1.00, "max": 1.00},
+      "ch3": {"min": -0.50, "max": 0.70},
+      "ch7": {"min": 0.00, "max": 1.00}
+    },
     "differential": [
       {
         "left": "ch2",
