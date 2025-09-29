@@ -79,8 +79,6 @@ class ModelsTab(MDBoxLayout, MDTabsBase):  # pragma: no cover - UI heavy
             self.app.refresh_models()
         self._table.refresh()
 
-    def get_actions(self):  # pragma: no cover
-        return self._table.get_actions()
 
     # Data helpers -----------------------------------------------------
     def _get_models(self) -> Iterable[tuple[str, str, str]]:

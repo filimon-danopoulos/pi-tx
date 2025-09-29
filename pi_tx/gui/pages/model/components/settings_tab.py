@@ -180,17 +180,3 @@ class SettingsTab(MDBoxLayout, MDTabsBase):
             self._status_label.text = "Ready to bind"
         self._status_label.theme_text_color = "Secondary"
 
-    # Actions for global FAB menu
-    def get_actions(self):  # pragma: no cover (UI integration)
-        return [
-            {
-                "text": "Model Settings: Bind/Rebind",
-                "callback": lambda: self._on_bind_pressed(self._bind_button),
-                "icon": "link-variant",
-            },
-            {
-                "text": "Model Settings: Refresh Status",
-                "callback": self._update_bind_button_text,
-                "icon": "refresh",
-            },
-        ]

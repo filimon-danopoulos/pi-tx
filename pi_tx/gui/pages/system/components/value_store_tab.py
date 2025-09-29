@@ -267,8 +267,3 @@ class ValueStoreTab(MDBoxLayout, MDTabsBase):
             self._log.error("Error removing system values: %s", e)
             return False
 
-    # New action provider for global FAB menu
-    def get_actions(self):  # pragma: no cover - delegate to generic table
-        if self._table:
-            return self._table.get_actions()
-        return []

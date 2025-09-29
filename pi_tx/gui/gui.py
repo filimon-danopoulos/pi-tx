@@ -3,16 +3,10 @@ from typing import Dict
 from kivy.clock import Clock
 from kivy.properties import StringProperty, DictProperty
 from kivymd.app import MDApp
-from kivymd.uix.boxlayout import MDBoxLayout
 from kivymd.uix.floatlayout import MDFloatLayout
 from kivymd.uix.screen import MDScreen
 from kivy.uix.screenmanager import ScreenManager
-from kivymd.uix.button import MDFloatingActionButton
-from kivymd.uix.menu import MDDropdownMenu
-from kivymd.uix.list import OneLineIconListItem, IconLeftWidget
 from kivy.properties import StringProperty
-from kivy.factory import Factory
-from kivy.metrics import dp
 from ..logging_config import get_logger
 
 log = get_logger(__name__)
@@ -65,14 +59,6 @@ class PiTxApp(MDApp):
             self._model_selector.set_channel_panel(self.channel_panel)
             nav.size_hint = (1, 1)
             root.add_widget(nav)
-            self._global_fab = MDFloatingActionButton(
-                icon="dots-vertical",
-                size_hint=(None, None),
-                elevation=5,
-                pos_hint={"right": 0.975, "y": 0.035},
-                on_release=self._open_global_actions_menu,
-            )
-            root.add_widget(self._global_fab)
             self._actions_menu = None
             self._navigation_rail = nav
         except Exception as e:  # pragma: no cover
@@ -85,78 +71,7 @@ class PiTxApp(MDApp):
         screen_manager.add_widget(screen)
         return screen_manager
 
-    # ---- Global FAB / Menu Logic ----
-    def _current_tab_actions(self):
-        try:
-            if not getattr(self, "_navigation_rail", None):
-                return []
-            rail = self._navigation_rail
-            current_key = getattr(rail, "_current_view", None)
-            view_obj = None
-            if current_key:
-                view_obj = getattr(rail, f"{current_key}_view", None)
-            if not view_obj and hasattr(rail, "_views"):
-                view_obj = rail._views.get(current_key)
-            if not view_obj:
-                return []
-            # If view has tabs
-            if hasattr(view_obj, "_tabs"):
-                try:
-                    tab = view_obj._tabs.get_current_tab()
-                    if tab and hasattr(tab, "get_actions"):
-                        return tab.get_actions() or []
-                except Exception:
-                    pass
-            if hasattr(view_obj, "get_actions"):
-                return view_obj.get_actions() or []
-        except Exception as e:
-            log.warning("Error collecting actions: %s", e)
-        return []
-
-    def _open_global_actions_menu(self, *args):  # pragma: no cover
-        self._rebuild_actions_menu()
-        if self._actions_menu:
-            self._actions_menu.open()
-
-    def _rebuild_actions_menu(self):  # pragma: no cover
-        actions = self._current_tab_actions()
-        if self._actions_menu:
-            self._actions_menu.dismiss()
-            self._actions_menu = None
-        if not actions:
-            return
-        menu_items = []
-        for a in actions:
-            cb = a.get("callback")
-            if not callable(cb):
-                continue
-            menu_items.append(
-                {
-                    "text": a.get("text", "(no text)"),
-                    "viewclass": "ActionMenuItem",
-                    "icon": a.get("icon", ""),
-                    "on_release": self._wrap_action_callback(cb),
-                }
-            )
-        if not menu_items:
-            return
-        self._actions_menu = MDDropdownMenu(
-            caller=self._global_fab,
-            items=menu_items,
-            width_mult=5,
-            max_height=dp(260),
-        )
-
-    def _wrap_action_callback(self, func):  # pragma: no cover
-        def _inner(*_a, **_kw):
-            if self._actions_menu:
-                self._actions_menu.dismiss()
-            try:
-                func()
-            except Exception as e:
-                log.error("Action error: %s", e)
-
-        return _inner
+    # (Global FAB logic removed)
 
     def refresh_models(self):
         self.available_models = self._model_manager.list_models()
@@ -216,24 +131,4 @@ def create_gui(input_controller: InputController):
     return PiTxApp(input_controller=input_controller)
 
 
-class ActionMenuItem(OneLineIconListItem):  # pragma: no cover - UI component
-    """Menu list item with optional left icon for dropdown actions."""
-
-    icon = StringProperty("")
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self._icon_widget = None
-        self.bind(icon=self._ensure_icon)
-        self._ensure_icon()
-
-    def _ensure_icon(self, *args):
-        if self.icon and self._icon_widget is None:
-            try:
-                self._icon_widget = IconLeftWidget(icon=self.icon)
-                self.add_widget(self._icon_widget)
-            except Exception as e:
-                log.warning("Failed adding icon to menu item: %s", e)
-
-
-Factory.register("ActionMenuItem", cls=ActionMenuItem)
+## Removed ActionMenuItem (unused after FAB removal)

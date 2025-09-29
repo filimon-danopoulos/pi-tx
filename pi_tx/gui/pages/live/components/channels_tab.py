@@ -33,14 +33,3 @@ class ChannelsTab(MDBoxLayout, MDTabsBase):
         if self.channel_panel:
             self.channel_panel.update_values(snapshot)
 
-    # Provide actions for global FAB menu
-    def get_actions(self):  # pragma: no cover (UI integration)
-        return [
-            {
-                "text": "Live: Refresh Now",
-                "callback": lambda: self.update_values(
-                    getattr(self.channel_panel, "last_snapshot", {})
-                ),
-                "icon": "refresh",
-            },
-        ]
