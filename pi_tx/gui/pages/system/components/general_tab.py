@@ -21,3 +21,17 @@ class GeneralTab(MDBoxLayout, MDTabsBase):
                 valign="top",
             )
         )
+
+    # Provide actions for the global FAB menu
+    def get_actions(self):  # pragma: no cover (UI integration)
+        return [
+            {
+                "text": "General: Show Info",
+                "callback": self._show_info,
+                "icon": "information",
+            },
+        ]
+
+    def _show_info(self, *args):  # simple illustrative callback
+        # Could be replaced with a dialog; for now just log
+        print("GeneralTab info action triggered")

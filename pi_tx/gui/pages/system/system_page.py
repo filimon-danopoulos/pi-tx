@@ -20,7 +20,6 @@ class SystemPage(MDBoxLayout):
     def __init__(self, app=None, **kwargs):
         super().__init__(orientation="vertical", padding=0, spacing=0, **kwargs)
         self.app = app
-        # Ensure this view fills available space
         self.size_hint = (1, 1)
 
         # Create tabs with explicit sizing
@@ -36,7 +35,7 @@ class SystemPage(MDBoxLayout):
         self._tabs.add_widget(self._value_store_tab)
         self._tabs.add_widget(self._general_tab)
 
-        # Add tabs to main container
+        # Container layout (keep existing vertical orientation)
         self.add_widget(self._tabs)
 
     def set_app(self, app):

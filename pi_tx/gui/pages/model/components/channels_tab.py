@@ -149,3 +149,9 @@ class ChannelsTab(MDBoxLayout, MDTabsBase):
 
         error_label = MDLabel(text=error_msg, theme_text_color="Error", halign="center")
         self.add_widget(error_label)
+
+    # Actions for global FAB menu
+    def get_actions(self):  # pragma: no cover (UI integration)
+        return [
+            {"text": "Model Channels: Refresh", "callback": self.refresh_table, "icon": "refresh"},
+        ]

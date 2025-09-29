@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from kivymd.uix.boxlayout import MDBoxLayout
 from kivymd.uix.datatables import MDDataTable
-from kivymd.uix.button import MDFloatingActionButton
 from kivymd.uix.floatlayout import MDFloatLayout
 from kivymd.uix.tab import MDTabsBase
 from kivy.metrics import dp
@@ -15,44 +14,36 @@ from .....infrastructure.file_cache import load_json, save_json
 
 
 class ModelsTab(MDBoxLayout, MDTabsBase):
-    """Tab for model selection and management."""
+    """Tab for model selection and management (FAB removed)."""
 
     def __init__(self, app=None, **kwargs):
         super().__init__(orientation="vertical", **kwargs)
         self.title = "Models"
         self.icon = "folder-multiple"
         self.app = app
-        # Ensure tab fills available space
         self.size_hint = (1, 1)
         self.spacing = 0
         self.padding = 0
 
-        # Initialize dialog references
         self.remove_dialog = None
         self.create_dialog = None
 
-        # Track selected models
         self._selected_models = set()
         self._table_data = []
 
-        # Create a float layout to contain the table and FAB
+        # Layout container (previously held FAB; now table only)
         self._float_layout = MDFloatLayout()
 
         # Create the data table immediately
         self._create_data_table()
 
-        # Add FAB for adding/removing models
-        self._fab = MDFloatingActionButton(
-            icon="plus",
-            pos_hint={"center_x": 0.9, "center_y": 0.1},
-            on_release=self._on_fab_pressed,
-        )
-        self._float_layout.add_widget(self._fab)
+        # FAB removed; placeholder attribute to avoid attribute errors
+        self._fab = None
 
         # Add the float layout to the main container
         self.add_widget(self._float_layout)
 
-        # Initialize FAB state
+        # FAB state logic removed (no-op retained for compatibility)
         self._update_fab_state()
 
     def _create_data_table(self):
@@ -155,14 +146,14 @@ class ModelsTab(MDBoxLayout, MDTabsBase):
         self._selected_models.clear()
 
         # Update FAB state after refreshing
-        self._update_fab_state()
+        self._update_fab_state()  # no-op
 
-    def _on_row_selected(self, instance, row):
+    def _on_row_selected(self, instance, row):  # noqa: D401
         """Handle row selection in the data table."""
         # Row selection is now just for display - model activation is separate
         pass
 
-    def _on_checkbox_press(self, instance, current_row):
+    def _on_checkbox_press(self, instance, current_row):  # noqa: D401
         """Handle checkbox press for model selection."""
         if not isinstance(current_row, (list, tuple)) or len(current_row) == 0:
             return
@@ -180,27 +171,11 @@ class ModelsTab(MDBoxLayout, MDTabsBase):
             self._selected_models.add(display_name)
 
         # Update FAB state
-        self._update_fab_state()
+        self._update_fab_state()  # no-op
 
-    def _update_fab_state(self):
-        """Update FAB icon and color based on current selection state."""
-        if self._selected_models:
-            # Remove mode - red delete icon
-            self._fab.icon = "delete"
-            self._fab.md_bg_color = (0.9, 0.2, 0.2, 1.0)  # Red
-        else:
-            # Add mode - blue plus icon
-            self._fab.icon = "plus"
-            self._fab.md_bg_color = (0.2, 0.6, 1.0, 1.0)  # Blue
-
-    def _on_fab_pressed(self, *args):
-        """Handle FAB press - either add or remove based on current state."""
-        if self._selected_models:
-            # Remove mode - show confirmation for selected models
-            self._show_remove_model_dialog()
-        else:
-            # Add mode - show create dialog
-            self._show_create_model_dialog()
+    def _update_fab_state(self):  # noqa: D401
+        """FAB removed: no-op retained for compatibility."""
+        return
 
     def _on_model_changed(self, app, model_name):
         """Called when a model is selected to refresh the display."""
@@ -212,7 +187,7 @@ class ModelsTab(MDBoxLayout, MDTabsBase):
         self._data_table.row_data = self._table_data
         # Clear selection when refreshing
         self._selected_models.clear()
-        self._update_fab_state()
+        self._update_fab_state()  # no-op
 
     def _show_remove_model_dialog(self, *args):
         """Show confirmation dialog to remove the selected models."""
@@ -368,3 +343,28 @@ class ModelsTab(MDBoxLayout, MDTabsBase):
         while idx in used:
             idx += 1
         return idx
+
+    # New action provider for global FAB menu
+    def get_actions(self):  # pragma: no cover (UI integration)
+        """Return list of unique action dicts for this tab.
+
+        Each action: { 'text': str, 'callback': callable }
+        Text values are unique across tabs for testing.
+        """
+        return [
+            {
+                "text": "Models: Create New",
+                "callback": self._show_create_model_dialog,
+                "icon": "plus-box",
+            },
+            {
+                "text": "Models: Remove Selected",
+                "callback": self._show_remove_model_dialog,
+                "icon": "delete-forever",
+            },
+            {
+                "text": "Models: Refresh",
+                "callback": self.refresh_models,
+                "icon": "refresh",
+            },
+        ]

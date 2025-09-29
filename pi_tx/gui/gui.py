@@ -4,8 +4,15 @@ from kivy.clock import Clock
 from kivy.properties import StringProperty, DictProperty
 from kivymd.app import MDApp
 from kivymd.uix.boxlayout import MDBoxLayout
+from kivymd.uix.floatlayout import MDFloatLayout
 from kivymd.uix.screen import MDScreen
 from kivy.uix.screenmanager import ScreenManager
+from kivymd.uix.button import MDFloatingActionButton
+from kivymd.uix.menu import MDDropdownMenu
+from kivymd.uix.list import OneLineIconListItem, IconLeftWidget
+from kivy.properties import StringProperty
+from kivy.factory import Factory
+from kivy.metrics import dp
 
 from ..domain.channel_store import channel_store
 from ..input.controls import InputController
@@ -44,37 +51,114 @@ class PiTxApp(MDApp):
         self.theme_cls.primary_palette = "Teal"
         screen_manager = ScreenManager()
         screen = MDScreen()
-        content_root = MDBoxLayout(orientation="vertical")
-
+        root = MDFloatLayout()
         try:  # pragma: no cover
             nav = MainNavigationRail()
             self.channels_view = nav.channels_view
             self.channel_panel = nav.channel_panel
             self.model_settings_view = nav.model_settings_view
             self.system_settings_view = nav.system_settings_view
-            # Pass app reference to system settings for model management
             self.system_settings_view.set_app(self)
             self._model_selector.set_channel_panel(self.channel_panel)
-            content_root.add_widget(nav)
+            nav.size_hint = (1, 1)
+            root.add_widget(nav)
+            self._global_fab = MDFloatingActionButton(
+                icon="dots-vertical",
+                size_hint=(None, None),
+                elevation=5,
+                pos_hint={"right": 0.975, "y": 0.035},
+                on_release=self._open_global_actions_menu,
+            )
+            root.add_widget(self._global_fab)
+            self._actions_menu = None
             self._navigation_rail = nav
         except Exception as e:  # pragma: no cover
             print(f"Navigation init failed: {e}")
             self._navigation_rail = None
-
         Clock.schedule_once(lambda *_: self.refresh_models(), 0)
         Clock.schedule_interval(self._input_pump.tick, 1.0 / 100.0)
-        # Reduced from 30 FPS to 20 FPS for UI updates - still smooth but less CPU usage
         Clock.schedule_interval(self._poll_store_and_refresh, 1.0 / 20.0)
-        screen.add_widget(content_root)
+        screen.add_widget(root)
         screen_manager.add_widget(screen)
-
         return screen_manager
+
+    # ---- Global FAB / Menu Logic ----
+    def _current_tab_actions(self):
+        try:
+            if not getattr(self, "_navigation_rail", None):
+                return []
+            rail = self._navigation_rail
+            current_key = getattr(rail, "_current_view", None)
+            view_obj = None
+            if current_key:
+                view_obj = getattr(rail, f"{current_key}_view", None)
+            if not view_obj and hasattr(rail, "_views"):
+                view_obj = rail._views.get(current_key)
+            if not view_obj:
+                return []
+            # If view has tabs
+            if hasattr(view_obj, "_tabs"):
+                try:
+                    tab = view_obj._tabs.get_current_tab()
+                    if tab and hasattr(tab, "get_actions"):
+                        return tab.get_actions() or []
+                except Exception:
+                    pass
+            if hasattr(view_obj, "get_actions"):
+                return view_obj.get_actions() or []
+        except Exception as e:
+            print(f"Error collecting actions: {e}")
+        return []
+
+    def _open_global_actions_menu(self, *args):  # pragma: no cover
+        self._rebuild_actions_menu()
+        if self._actions_menu:
+            self._actions_menu.open()
+
+    def _rebuild_actions_menu(self):  # pragma: no cover
+        actions = self._current_tab_actions()
+        if self._actions_menu:
+            self._actions_menu.dismiss()
+            self._actions_menu = None
+        if not actions:
+            return
+        menu_items = []
+        for a in actions:
+            cb = a.get("callback")
+            if not callable(cb):
+                continue
+            menu_items.append(
+                {
+                    "text": a.get("text", "(no text)"),
+                    "viewclass": "ActionMenuItem",
+                    "icon": a.get("icon", ""),
+                    "on_release": self._wrap_action_callback(cb),
+                }
+            )
+        if not menu_items:
+            return
+        self._actions_menu = MDDropdownMenu(
+            caller=self._global_fab,
+            items=menu_items,
+            width_mult=5,
+            max_height=dp(260),
+        )
+
+    def _wrap_action_callback(self, func):  # pragma: no cover
+        def _inner(*_a, **_kw):
+            if self._actions_menu:
+                self._actions_menu.dismiss()
+            try:
+                func()
+            except Exception as e:
+                print(f"Action error: {e}")
+
+        return _inner
 
     def refresh_models(self):
         self.available_models = self._model_manager.list_models()
         if not self.selected_model and not self._selecting_model:
             self._autoload_last_model()
-        # Update system settings model list
         try:
             if hasattr(self, "system_settings_view") and self.system_settings_view:
                 self.system_settings_view.refresh_models()
@@ -83,7 +167,7 @@ class PiTxApp(MDApp):
 
     def _poll_store_and_refresh(self, *_):
         snap = channel_store.snapshot()
-        
+
         # Only update UI if snapshot actually changed
         if snap != self._last_snapshot:
             self._last_snapshot = snap[:]  # Store a copy
@@ -127,3 +211,25 @@ class PiTxApp(MDApp):
 
 def create_gui(input_controller: InputController):
     return PiTxApp(input_controller=input_controller)
+
+
+class ActionMenuItem(OneLineIconListItem):  # pragma: no cover - UI component
+    """Menu list item with optional left icon for dropdown actions."""
+    icon = StringProperty("")
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self._icon_widget = None
+        self.bind(icon=self._ensure_icon)
+        self._ensure_icon()
+
+    def _ensure_icon(self, *args):
+        if self.icon and self._icon_widget is None:
+            try:
+                self._icon_widget = IconLeftWidget(icon=self.icon)
+                self.add_widget(self._icon_widget)
+            except Exception as e:
+                print(f"Failed adding icon to menu item: {e}")
+
+
+Factory.register("ActionMenuItem", cls=ActionMenuItem)
