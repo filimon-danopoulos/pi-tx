@@ -38,7 +38,7 @@ class ValueStoreTab(MDBoxLayout, MDTabsBase):
         self._add_dialog = None
         self._remove_dialog = None
 
-        # Layout container (previously held FAB; now table only)
+    # Layout container for table content
         self._float_layout = MDFloatLayout()
 
         # Create the table immediately

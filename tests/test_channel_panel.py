@@ -91,4 +91,4 @@ def test_channel_panel_update_values():
     assert (
         panel.rows[2].bar.value == 0.75
     )  # unchanged because method clamps but doesn't zero existing if snapshot index missing
-    # We can assert behavior: missing indices keep old value (documented by code path)
+    # Assert behavior: missing indices retain existing value

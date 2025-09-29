@@ -121,7 +121,7 @@ def test_model_id_attached_to_debug_frames():
     assert frames and any(f.get("meta", {}).get("model_id") == "abc123" for f in frames)
 
 
-# Restored tests from legacy file (previously test_uart_multi.py) for full coverage
+## Additional coverage tests
 
 def test_sampler_normalized_scaling():
     dbg = DebugUartTx()

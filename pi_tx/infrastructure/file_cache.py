@@ -331,8 +331,21 @@ class FileCache:
 
     def _cleanup(self):
         """Cleanup method called on shutdown."""
-        if self._auto_save:
+        if not self._auto_save:
+            return
+        # Suppress logging during interpreter shutdown (handlers may be closed)
+        try:
+            prev_disabled = getattr(self._log, "disabled", False)
+            self._log.disabled = True  # silence flush logging
             self.flush_all()
+        except Exception:
+            # Best-effort only; never raise during GC/atexit
+            pass
+        finally:
+            try:
+                self._log.disabled = prev_disabled  # type: ignore
+            except Exception:
+                pass
 
 
 # Global instance

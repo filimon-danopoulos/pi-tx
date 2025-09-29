@@ -38,7 +38,7 @@ class ModelsTab(MDBoxLayout, MDTabsBase):
         self._selected_models = set()
         self._table_data = []
 
-        # Layout container (previously held FAB; now table only)
+    # Layout container for table content
         self._float_layout = MDFloatLayout()
 
         # Create the data table immediately

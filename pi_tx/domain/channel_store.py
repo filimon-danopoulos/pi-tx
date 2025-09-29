@@ -67,56 +67,48 @@ class ChannelStore:
             out[right_i if inv else left_i] = left_val / scale
             out[left_i if inv else right_i] = right_val / scale
         return out
-
     def _aggregate_proc(self, values: List[float]) -> List[float]:
-        """Compute configured aggregates (formerly sound mixes).
+        """Compute configured aggregates.
 
-        For each configured sound mix group we:
-          - Take abs of each source channel.
-          - Multiply by its specific weight.
-          - Sum and clamp to 0..1.
-          - Write into target channel or first source if target absent.
+        For each configured aggregate we:
+          - Take abs of each source channel
+          - Multiply by its specific weight (default 1.0)
+          - Sum and clamp 0..1
+          - Write into target channel or first source if target absent
         """
         if not self._aggregates:
             return values
         out = values[:]
         size = len(out)
         for chan_weights, target in self._aggregates:
-            s = 0.0
+            total = 0.0
             for ch_id, weight in chan_weights:
                 idx = ch_id - 1
                 if 0 <= idx < size:
-                    s += abs(out[idx]) * weight
-            if s > 1.0:
-                s = 1.0
-            tgt = (
-                target
-                if target is not None
-                else (chan_weights[0][0] if chan_weights else None)
-            )
+                    total += abs(out[idx]) * weight
+            if total > 1.0:
+                total = 1.0
+            tgt = target if target is not None else (chan_weights[0][0] if chan_weights else None)
             if tgt is not None:
                 t_idx = tgt - 1
                 if 0 <= t_idx < size:
-                    out[t_idx] = s
+                    out[t_idx] = total
         return out
 
     def configure_processors(self, processors_cfg: Dict[str, Any] | None):
         if not processors_cfg:
             return
+        # reverse flags
         rev = processors_cfg.get("reverse") or {}
         for key, val in rev.items():
             try:
-                # Expect ch1 format only
                 if isinstance(key, str) and key.startswith("ch"):
                     idx = int(key[2:]) - 1
                     if 0 <= idx < len(self._reverse_flags) and isinstance(val, bool):
                         self._reverse_flags[idx] = val
-                else:
-                    self._log.debug("Invalid reverse key format", extra={"key": key})
             except Exception as e:
-                self._log.debug(
-                    "Bad reverse entry", extra={"key": key, "error": str(e)}
-                )
+                self._log.debug("Bad reverse entry", extra={"key": key, "error": str(e)})
+        # differential mixes
         diff_cfg = processors_cfg.get("differential")
         if isinstance(diff_cfg, list):
             parsed: List[tuple[int, int, bool]] = []
@@ -124,73 +116,50 @@ class ChannelStore:
                 if not isinstance(m, dict):
                     continue
                 try:
-                    # Expect ch1 format only
                     left_raw = m.get("left")
                     right_raw = m.get("right")
-
-                    if isinstance(left_raw, str) and left_raw.startswith("ch"):
-                        left = int(left_raw[2:]) - 1
-                    else:
-                        raise ValueError(
-                            f"Invalid left format {left_raw}, expected 'ch1' format"
-                        )
-
-                    if isinstance(right_raw, str) and right_raw.startswith("ch"):
-                        right = int(right_raw[2:]) - 1
-                    else:
-                        raise ValueError(
-                            f"Invalid right format {right_raw}, expected 'ch1' format"
-                        )
-
+                    if not (isinstance(left_raw, str) and left_raw.startswith("ch")):
+                        raise ValueError("bad left")
+                    if not (isinstance(right_raw, str) and right_raw.startswith("ch")):
+                        raise ValueError("bad right")
+                    left = int(left_raw[2:]) - 1
+                    right = int(right_raw[2:]) - 1
                     inverse = bool(m.get("inverse", False))
                     parsed.append((left, right, inverse))
                 except Exception:
                     continue
             self._differential_mixes = parsed
-        # aggregate configuration supports per-channel weights; accepts legacy key 'sound_mix'
-        sm_cfg = processors_cfg.get("aggregate") or processors_cfg.get("sound_mix")
-        if isinstance(sm_cfg, list):
-            sm_parsed: List[tuple[List[tuple[int, float]], int | None]] = []
-            for m in sm_cfg:
+        # aggregates
+        agg_cfg = processors_cfg.get("aggregate")
+        if isinstance(agg_cfg, list):
+            agg_parsed: List[tuple[List[tuple[int, float]], int | None]] = []
+            for m in agg_cfg:
                 if not isinstance(m, dict):
                     continue
                 try:
                     ch_entries = m.get("channels") or []
-                    top_weight = m.get("value")  # legacy uniform multiplier
                     chan_weights: List[tuple[int, float]] = []
                     for entry in ch_entries:
                         if isinstance(entry, dict):
-                            ch_id = (
-                                entry.get("id")
-                                or entry.get("ch")
-                                or entry.get("channel")
-                            )
+                            ch_id = entry.get("id") or entry.get("ch") or entry.get("channel")
                             if ch_id is None:
                                 continue
-                            # Expect ch1 format only
                             if isinstance(ch_id, str) and ch_id.startswith("ch"):
                                 cid = int(ch_id[2:])
                             else:
-                                raise ValueError(
-                                    f"Invalid channel ID format {ch_id}, expected 'ch1' format"
-                                )
+                                raise ValueError("bad channel id")
                             if cid <= 0:
                                 continue
                             w = entry.get("value")
                             weight = float(w) if w is not None else 1.0
                         else:
-                            # Expect ch1 format only for direct entries
                             if isinstance(entry, str) and entry.startswith("ch"):
                                 cid = int(entry[2:])
                             else:
-                                raise ValueError(
-                                    f"Invalid channel entry format {entry}, expected 'ch1' format"
-                                )
+                                raise ValueError("bad channel entry")
                             if cid <= 0:
                                 continue
-                            weight = (
-                                float(top_weight) if top_weight is not None else 1.0
-                            )
+                            weight = 1.0
                         if weight < 0.0:
                             weight = 0.0
                         if weight > 1.0:
@@ -199,18 +168,15 @@ class ChannelStore:
                     target_raw = m.get("target")
                     target_idx: int | None = None
                     if target_raw is not None:
-                        # Expect ch1 format only for target
                         if isinstance(target_raw, str) and target_raw.startswith("ch"):
                             target_idx = int(target_raw[2:])
                         else:
-                            raise ValueError(
-                                f"Invalid target format {target_raw}, expected 'ch1' format"
-                            )
+                            raise ValueError("bad target")
                     if chan_weights:
-                        sm_parsed.append((chan_weights, target_idx))
+                        agg_parsed.append((chan_weights, target_idx))
                 except Exception:
                     continue
-            self._aggregates = sm_parsed
+            self._aggregates = agg_parsed
         self._build_pipeline()
 
     def configure_differential_mixes(self, mixes: List[Dict[str, Any]]):
@@ -275,7 +241,7 @@ class ChannelStore:
         self._processors = []
         self._recompute()
 
-    # Note: earlier 'sound_mix_values' accessor removed; aggregate writes into target (or first source).
+    # Aggregate writes into target (or first source) – accessor kept simple.
 
     def _recompute(self):
         cur = self._raw[:]

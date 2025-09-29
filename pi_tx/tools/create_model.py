@@ -34,7 +34,6 @@ def load_existing_model(model_name: str) -> Dict[str, Any]:
         return {"name": model_name, "channels": {}, "model_id": uuid.uuid4().hex}
     if "model_id" not in data:
         data["model_id"] = uuid.uuid4().hex
-    # legacy: add rx_num if missing
     if "rx_num" not in data:
         data["rx_num"] = 0
     return data

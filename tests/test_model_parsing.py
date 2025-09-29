@@ -80,20 +80,3 @@ def test_persistence_round_trip(tmp_path, monkeypatch):
     # Overwrite with whitespace only -> should read back None
     test_file.write_text(" \n\n ")
     assert read_last_model() is None
-
-
-def test_legacy_sound_mix_key_still_supported(tmp_path):
-    # Ensure legacy key 'sound_mix' still parsed as aggregate
-    models_dir = tmp_path / "models"
-    models_dir.mkdir()
-    cfg = {
-        "channels": {
-            "1": {"control_type": "unipolar", "device_path": "", "control_code": 0}
-        },
-        "processors": {"sound_mix": [{"channels": [1], "value": 1.0}]},
-    }
-    with open(models_dir / "legacy.json", "w") as f:
-        json.dump(cfg, f)
-    repo = ModelRepository(str(models_dir))
-    m = repo.load_model("legacy")
-    assert "aggregate" in m.processors or "sound_mix" in m.processors

@@ -41,7 +41,6 @@ Comprehensive review of `pi_tx/` focusing on Python quality, Kivy/KivyMD practic
 - [ ] Extract dialog classes / builders to dedicated module (already partially done but logic still interspersed in tabs).
 - [ ] Move duplicated channel formatting code into utility (channel name, device_display logic appears in multiple areas).
 - [ ] Standardize naming: methods like `_refresh_table`, `refresh_table`, `_refresh_content` – converge on a consistent prefix (internal vs public).
-- [x] Remove deprecated/unused `model_page_old.py` (file deleted).
 - [ ] Consolidate action icon naming scheme (currently mix of `plus`, `plus-box`, `delete`, `delete-forever`). Decide on filled vs outline pattern.
 - [ ] Introduce dataclass or small object for menu actions instead of loose dict to avoid key typos.
 - [ ] Provide a base TabActionProvider mixin to enforce `get_actions()` signature and maybe enable/disable logic.
@@ -99,7 +98,6 @@ Comprehensive review of `pi_tx/` focusing on Python quality, Kivy/KivyMD practic
 - [ ] Use tuple for immutable constant lists (e.g., _column_widths can remain tuple).
 
 ## Cleanup / Dead Code
-- [x] Remove or archive `model_page_old.py` (removed).
 - [ ] Remove commented or placeholder prints after adding logging.
 - [ ] Eliminate leftover placeholder no-op methods for removed FAB logic if no longer needed.
 

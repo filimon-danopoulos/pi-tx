@@ -92,10 +92,6 @@ Layered (lightweight):
 - infrastructure: persistence utilities
 - config: path constants, separation from logic
 
-## Legacy Cleanup
-
-Old `src/` modules (controls/gui/model_repo/channel_store/state/setup/main*) were superseded by the package structure. Safe to remove them once you’ve migrated any custom code.
-
 ## Roadmap Ideas
 
 - Console entry point (`pi-tx`) via `setup.cfg` / `pyproject.toml`
