@@ -46,9 +46,6 @@ def save_model_mapping(mapping: Dict[str, Any], model_name: str) -> None:
         mapping["model_id"] = uuid.uuid4().hex
     if "rx_num" not in mapping:
         mapping["rx_num"] = 0
-    if "model_index" not in mapping:
-        # Leave at 0; allocation happens on creation flow
-        mapping["model_index"] = 0
     save_json(str(MODELS_DIR / f"{model_name}.json"), mapping)
     print(f"Saved model to {MODELS_DIR / (model_name + '.json')}")
 
@@ -80,39 +77,10 @@ def print_available_controls(stick_mapping: Dict[str, Any]) -> None:
 def print_current_model(model_mapping: Dict[str, Any]) -> None:
     print(f"\nModel: {model_mapping.get('name', 'Unnamed')}")
     print(
-        f"ID: {model_mapping.get('model_id','?')}  RX Slot: {model_mapping.get('rx_num','?')}  Index: {model_mapping.get('model_index','?')}"
+        f"ID: {model_mapping.get('model_id','?')}  RX Slot: {model_mapping.get('rx_num','?')}"
     )
     # Early exit if no channels have been mapped yet
     if not model_mapping.get("channels"):
-        print("\nNo channels mapped yet.")
-        return
-    print("\nChannel mapping:")
-    print("-" * 90)
-    print(f"{'Channel':<10} {'Device':<28} {'Path':<30} {'Control':<15}")
-    print("-" * 90)
-    for channel, mapping in sorted(
-        model_mapping["channels"].items(), key=lambda x: int(x[0])
-    ):
-        print(
-            f"{channel:<10} {mapping.get('device_name','')[:28]:<28} {mapping.get('device_path','')[:30]:<30} {mapping.get('control_name','')[:15]:<15}"
-        )
-
-
-def allocate_model_index(existing_models: list[str]) -> int:
-    used = set()
-    for m in existing_models:
-        path = MODELS_DIR / f"{m}.json"
-        try:
-            data = load_json(str(path))
-            if data and "model_index" in data:
-                used.add(int(data["model_index"]))
-        except Exception:
-            continue
-    idx = 1
-    while idx in used:
-        idx += 1
-    return idx
-    if not model_mapping["channels"]:
         print("\nNo channels mapped yet.")
         return
     print("\nChannel mapping:")
@@ -193,8 +161,6 @@ def create_mapping() -> None:
     models_list = get_available_models()
     if "rx_num" not in model_mapping or model_mapping.get("channels") == {}:
         model_mapping["rx_num"] = allocate_rx_num(models_list)
-    if "model_index" not in model_mapping:
-        model_mapping["model_index"] = allocate_model_index(models_list)
     while True:
         print("\nModel Mapping Configuration\n" + "=" * 60)
         print_current_model(model_mapping)

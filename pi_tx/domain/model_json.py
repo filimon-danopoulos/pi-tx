@@ -25,7 +25,6 @@ class Model:
     processors: Dict[str, Any] = field(default_factory=dict)
     model_id: str = field(default_factory=lambda: uuid.uuid4().hex)
     rx_num: int = 0
-    model_index: int = 0
     bind_timestamp: str = ""  # ISO timestamp when model was last bound
 
 
@@ -38,12 +37,7 @@ def parse_model_dict(name: str, data: Dict[str, Any]) -> Model:
     processors_cfg = data.get("processors", {}) or {}
     model_id = data.get("model_id") or uuid.uuid4().hex
     bind_timestamp = data.get("bind_timestamp", "")
-    # model_index & rx_num normalization
-    model_index_raw = data.get("model_index")
-    try:
-        model_index = int(model_index_raw)
-    except Exception:
-        model_index = 0
+    # rx_num normalization (model_index removed)
     rx_raw = data.get("rx_num")
     try:
         rx_num = int(rx_raw)
@@ -84,6 +78,5 @@ def parse_model_dict(name: str, data: Dict[str, Any]) -> Model:
         processors=processors_cfg,
         model_id=model_id,
         rx_num=rx_num,
-        model_index=model_index,
         bind_timestamp=bind_timestamp,
     )

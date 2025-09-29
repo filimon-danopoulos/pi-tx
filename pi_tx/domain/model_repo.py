@@ -45,7 +45,6 @@ class ModelRepository:
             "name": model.name,
             "model_id": model.model_id,
             "rx_num": model.rx_num,
-            "model_index": model.model_index,
             "bind_timestamp": model.bind_timestamp,
             "channels": {},
             "processors": model.processors,

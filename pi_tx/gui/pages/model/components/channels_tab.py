@@ -2,27 +2,35 @@ from __future__ import annotations
 
 from kivymd.uix.boxlayout import MDBoxLayout
 from kivymd.uix.label import MDLabel
-from kivymd.uix.datatables import MDDataTable
 from kivymd.uix.tab import MDTabsBase
-from kivy.metrics import dp
+
+from ....components.data_table import (
+    DataTable,
+    ColumnSpec,
+    GlobalAction,
+    ActionItem,
+    InlineCreateConfig,
+)
 
 from .....config.settings import STICK_MAPPING_FILE
 from .....infrastructure.file_cache import load_json
+from .....logging_config import get_logger
 
 
 class ChannelsTab(MDBoxLayout, MDTabsBase):
     """Tab containing the channels data table."""
 
     # Pre-compute common dp values for better performance
-    _column_widths = [dp(20), dp(35), dp(35), dp(25), dp(20)]
+    # Size hint distribution approximating previous dp widths (total ~135)
+    _column_size_hints = [0.18, 0.20, 0.22, 0.22, 0.18]
 
     def __init__(self, **kwargs):
         super().__init__(orientation="vertical", spacing=0, **kwargs)
         self.title = "Channels"
         self.icon = "view-list"
+        self._log = get_logger(__name__)
 
-        self._data_table = None
-        self._table_data = []
+        self._table = None
         self._current_model = None
 
     def set_model(self, model, model_manager):
@@ -33,95 +41,94 @@ class ChannelsTab(MDBoxLayout, MDTabsBase):
 
     def refresh_table(self):
         """Refresh the table data and update display."""
-        if self._data_table:
-            self._update_table_data()
-            self._data_table.row_data = self._table_data
+        if self._table:
+            self._table.refresh()
 
     def _refresh_content(self):
         """Rebuild the content with channel data table."""
         # Clear all widgets
         self.clear_widgets()
-
         if not self._current_model:
             self._show_error("No model selected")
             return
-
-        # Create the channels table
         self._create_channels_table()
 
     def _create_channels_table(self):
         """Create and display the channels data table."""
-        # Prepare table data
-        self._table_data = []
-        self._update_table_data()
 
-        # Create data table with dynamic sizing based on configured channels
-        num_rows = len(self._table_data)
-        # Use a reasonable limit for visible rows - max 15 on 480px screen
-        visible_rows = min(num_rows, 15)
+        def row_provider():
+            return self._build_rows()
 
-        self._data_table = MDDataTable(
-            use_pagination=False,
-            rows_num=visible_rows,  # Dynamic based on actual data
-            column_data=[
-                ("Channel", self._column_widths[0]),
-                ("Type", self._column_widths[1]),
-                ("Device", self._column_widths[2]),
-                ("Control", self._column_widths[3]),
-                ("Code", self._column_widths[4]),
+        self._table = DataTable(
+            columns=[
+                ColumnSpec(
+                    "channel",
+                    "Channel",
+                    self._column_size_hints[0],
+                    extractor=lambda r: r[0],
+                ),
+                ColumnSpec(
+                    "type", "Type", self._column_size_hints[1], extractor=lambda r: r[1]
+                ),
+                ColumnSpec(
+                    "device",
+                    "Device",
+                    self._column_size_hints[2],
+                    extractor=lambda r: r[2],
+                ),
+                ColumnSpec(
+                    "control",
+                    "Control",
+                    self._column_size_hints[3],
+                    extractor=lambda r: r[3],
+                ),
+                ColumnSpec(
+                    "code", "Code", self._column_size_hints[4], extractor=lambda r: r[4]
+                ),
             ],
-            row_data=self._table_data,
-            sorted_on="Channel",
-            sorted_order="ASC",
+            row_provider=row_provider,
+            row_actions_builder=self._row_actions,  # mocked actions for now
+            inline_create=InlineCreateConfig(
+                placeholder="Add ch #",
+                validator=self._validate_new_channel,
+                create_handler=self._inline_add_channel,
+                helper_text="Number 1-99; creates placeholder",
+            ),
+            global_actions=[
+                GlobalAction(
+                    text="Model Channels: Refresh",
+                    icon="refresh",
+                    callback=self.refresh_table,
+                )
+            ],
         )
+        self.add_widget(self._table)
 
-        # Add table to channels tab
-        self.add_widget(self._data_table)
-
-    def _update_table_data(self):
-        """Update the table data with current model channel configuration."""
-        self._table_data.clear()
-
+    def _build_rows(self):
         if not self._current_model or not self._current_model.channels:
-            # If no model or channels, show placeholder message
-            self._table_data.append(("-", "-", "-", "-", "-"))
-            return
+            return [("-", "-", "-", "-", "-")]
 
-        # Load stick mapping once (cached)
         stick_mapping = self._load_stick_mapping()
-
-        # Pre-allocate list for better performance
         channels = self._current_model.channels
-        table_rows = []
-
-        # Process all channels in one pass
+        rows = []
         for ch_id in sorted(channels.keys()):
             channel = channels[ch_id]
-
-            # Format device info using cached stick_mapping
             if not channel.device_path:
                 device_display = "Virtual"
             else:
-                # Look up device name from stick mapping
                 device_info = stick_mapping.get(channel.device_path, {})
                 device_display = device_info.get("name", "Unknown Device")
-
-                # Fallback to extracting from path if not found in mapping
                 if device_display == "Unknown Device":
                     device_display = (
                         channel.device_path.split("/")[-1]
                         if "/" in channel.device_path
                         else channel.device_path
                     )
-
-            # Pre-format strings to avoid repeated operations
             channel_name = f"ch{channel.channel_id}"
             control_type = channel.control_type.title()
             control_display = f"Code {channel.control_code}"
             control_code_str = str(channel.control_code)
-
-            # Add row to batch
-            table_rows.append(
+            rows.append(
                 (
                     channel_name,
                     control_type,
@@ -130,15 +137,81 @@ class ChannelsTab(MDBoxLayout, MDTabsBase):
                     control_code_str,
                 )
             )
-
-        # Batch assign all rows at once
-        self._table_data.extend(table_rows)
+        return rows
 
     def _refresh_table(self, *args):
         """Refresh the table data and update display."""
-        if hasattr(self, "_data_table") and self._data_table:
-            self._update_table_data()
-            self._data_table.row_data = self._table_data
+        if self._table:
+            self._table.refresh()
+
+    # ------------------------------------------------------------------
+    # Mocked per-row actions
+    # ------------------------------------------------------------------
+    def _row_actions(self, row):  # pragma: no cover - UI only
+        channel_name = row[0]
+        return [
+            ActionItem("Edit", lambda r=channel_name: self._mock_edit(r)),
+            ActionItem(
+                "Toggle Reverse", lambda r=channel_name: self._mock_toggle_reverse(r)
+            ),
+            ActionItem("Delete", lambda r=channel_name: self._mock_delete(r)),
+        ]
+
+    def _mock_edit(self, channel_name):  # pragma: no cover - placeholder
+        self._log.info("Mock edit action for %s", channel_name)
+
+    def _mock_toggle_reverse(self, channel_name):  # pragma: no cover
+        self._log.info("Mock toggle reverse for %s", channel_name)
+
+    def _mock_delete(self, channel_name):  # pragma: no cover
+        self._log.info("Mock delete for %s", channel_name)
+
+    # ------------------------------------------------------------------
+    # Inline create helpers (adds placeholder channel to current model)
+    # ------------------------------------------------------------------
+    def _validate_new_channel(self, text: str) -> bool:  # pragma: no cover
+        if not text.isdigit():
+            return False
+        ch = int(text)
+        if ch < 1 or ch > 99:
+            return False
+        if not self._current_model:
+            return False
+        # current model uses integer channel ids
+        existing = self._current_model.channels.keys() if self._current_model else []
+        return ch not in existing
+
+    def _inline_add_channel(self, text: str):  # pragma: no cover
+        try:
+            if not self._current_model:
+                return False
+            ch = int(text)
+            if ch in self._current_model.channels:
+                return False
+            # Minimal placeholder channel config
+            from .....domain.model_json import ChannelConfig
+
+            self._current_model.channels[ch] = ChannelConfig(
+                channel_id=ch,
+                control_type="unipolar",
+                device_path="",
+                control_code="virtual",
+                device_name="",
+                control_name="",
+            )
+            # If model_manager has a save method, attempt persistence
+            if hasattr(self, "_model_manager") and hasattr(
+                self._model_manager, "save_model"
+            ):
+                try:
+                    self._model_manager.save_model(self._current_model)
+                except Exception:  # pragma: no cover
+                    self._log.info("Model manager save unavailable or failed")
+            self.refresh_table()
+            return True
+        except Exception as e:  # pragma: no cover
+            self._log.warning("Inline add failed: %s", e)
+            return False
 
     def _load_stick_mapping(self):
         """Load stick mapping from JSON file using file cache."""
@@ -154,10 +227,6 @@ class ChannelsTab(MDBoxLayout, MDTabsBase):
 
     # Actions for global FAB menu
     def get_actions(self):  # pragma: no cover (UI integration)
-        return [
-            {
-                "text": "Model Channels: Refresh",
-                "callback": self.refresh_table,
-                "icon": "refresh",
-            },
-        ]
+        if self._table:
+            return self._table.get_actions()
+        return []

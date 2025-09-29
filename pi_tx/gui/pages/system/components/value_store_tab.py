@@ -2,9 +2,15 @@ from __future__ import annotations
 
 from kivymd.uix.boxlayout import MDBoxLayout
 from kivymd.uix.tab import MDTabsBase
-from kivymd.uix.datatables import MDDataTable
 from kivymd.uix.floatlayout import MDFloatLayout
-from kivy.metrics import dp
+
+from ....components.data_table import (
+    DataTable,
+    ColumnSpec,
+    ActionItem,
+    GlobalAction,
+    InlineCreateConfig,
+)
 
 from .....domain.value_store import value_store
 from .....logging_config import get_logger
@@ -31,139 +37,102 @@ class ValueStoreTab(MDBoxLayout, MDTabsBase):
         self._log = get_logger(__name__)
 
         # Table and selection state
-        self._data_table = None
-        self._table_data = []
-        self._selected_rows = []  # Track multiple selected rows
+        self._table = None
+        self._selected_rows: list[tuple] = []  # hold last rows pending removal
         # Dialog references
         self._add_dialog = None
         self._remove_dialog = None
 
-    # Layout container for table content
+        # Layout container for table content
         self._float_layout = MDFloatLayout()
 
         # Create the table immediately
-        self._create_data_table()
+        self._create_table()
 
         # Add the float layout to the main container
         self.add_widget(self._float_layout)
 
-    def _create_data_table(self):
-        """Create the data table as the only content."""
-        # Prepare table data
-        self._table_data = []
-        self._update_table_data()
+    def _create_table(self):
+        """Create generic DataTable for value store view."""
 
-        # Create data table with dynamic sizing based on configured channels
-        num_rows = len(self._table_data)
-        # Use a reasonable limit for visible rows - max 15 on 480px screen
-        visible_rows = min(num_rows, 15)
+        def row_provider():
+            return self._build_rows()
 
-        self._data_table = MDDataTable(
-            use_pagination=False,
-            check=True,  # Enable built-in checkboxes
-            rows_num=visible_rows,  # Dynamic based on actual data
-            column_data=[
-                ("Id", dp(20)),
-                ("Device", dp(35)),
-                ("Control", dp(30)),
-                ("Type", dp(30)),
-                ("Reversed", dp(25)),
+        def row_actions_builder(row):  # pragma: no cover - UI event
+            return [
+                ActionItem("Remove", lambda r=row: self._prepare_and_remove([r])),
+                ActionItem("Refresh", lambda: self._refresh_table()),
+            ]
+
+        self._table = DataTable(
+            columns=[
+                ColumnSpec("id", "Id", 0.14, extractor=lambda r: r[0]),
+                ColumnSpec("device", "Device", 0.26, extractor=lambda r: r[1]),
+                ColumnSpec("control", "Control", 0.20, extractor=lambda r: r[2]),
+                ColumnSpec("type", "Type", 0.20, extractor=lambda r: r[3]),
+                ColumnSpec("rev", "Reversed", 0.10, extractor=lambda r: r[4]),
             ],
-            row_data=self._table_data,
+            row_provider=row_provider,
+            row_actions_builder=row_actions_builder,
+            inline_create=InlineCreateConfig(
+                placeholder="Add channel (1-32)",
+                validator=self._validate_inline_channel,
+                create_handler=self._inline_add_channel,
+                helper_text="Enter number; adds default unipolar channel",
+            ),
+            global_actions=[
+                GlobalAction(
+                    text="Values: Add", icon="plus", callback=self._show_add_dialog
+                ),
+                GlobalAction(
+                    text="Values: Remove Selected",
+                    icon="delete",
+                    callback=lambda: self._show_remove_confirmation(
+                        self._selected_rows
+                    ),
+                ),
+                GlobalAction(
+                    text="Values: Refresh",
+                    icon="refresh",
+                    callback=self._refresh_table,
+                ),
+            ],
         )
-
-        # Bind to row selection and checkbox events
-        self._data_table.bind(on_row_press=self._on_row_selected)
-        self._data_table.bind(on_check_press=self._on_checkbox_press)
-
-        # Add table to the float layout instead of directly to the tab
-        self._float_layout.add_widget(self._data_table)
+        self._float_layout.add_widget(self._table)
 
     def on_size(self, instance, size):  # noqa: D401 (simple handler)
         """Called when tab size changes (unused)."""
         pass
 
-    def _update_table_data(self):
-        """Update the table data with current value store state."""
-        self._table_data.clear()
-
-        # Only show channels that have some configuration or non-default values
+    def _build_rows(self):
+        rows = []
         for ch in range(1, value_store.size() + 1):
             ch_type = value_store.get_channel_type(ch)
             is_reversed = value_store.is_reversed(ch)
-
-            # Skip channels with all default values (unipolar, not reversed)
-            has_config = (
-                ch_type != "unipolar"  # Non-default channel type
-                or is_reversed  # Channel is reversed
-            )
-
-            # Only add channels that have some meaningful configuration
+            has_config = ch_type != "unipolar" or is_reversed
             if has_config:
-                device_name = value_store.get_device_name(ch)
-                control_name = value_store.get_control_name(ch)
-                row_id = f"var{ch}"
-
-                # Create row data (no manual checkbox column needed)
-                self._table_data.append(
+                rows.append(
                     (
-                        row_id,  # Id column (first)
-                        device_name,  # Device column
-                        control_name,  # Control column
-                        ch_type,  # Type column
-                        "Yes" if is_reversed else "No",  # Reversed column
+                        f"var{ch}",
+                        value_store.get_device_name(ch),
+                        value_store.get_control_name(ch),
+                        ch_type,
+                        "Yes" if is_reversed else "No",
                     )
                 )
-
-        # If no channels have configuration, show a placeholder message
-        if not self._table_data:
-            self._table_data.append(
-                (
-                    "-",
-                    "No configured channels",
-                    "-",
-                    "-",
-                    "-",
-                )
-            )
+        if not rows:
+            rows.append(("-", "No configured channels", "-", "-", "-"))
+        return rows
 
     def _refresh_table(self, *args):  # noqa: D401
-        """Refresh the table data and update display."""
-        self._update_table_data()
-        self._data_table.row_data = self._table_data
-        # Clear selection when refreshing
         self._selected_rows = []
+        if self._table:
+            self._table.refresh()
 
-    def _on_row_selected(self, instance, row):  # noqa: D401
-        """Handle row selection in the data table (no extra logic)."""
-        try:
-            self._log.debug("Row selected: %s (type: %s)", row, type(row))
-        except Exception as e:  # pragma: no cover - defensive
-            self._log.warning("Row selection handler error: %s", e)
-
-    def _on_checkbox_press(self, instance, current_row):  # noqa: D401
-        """Handle checkbox press events."""
-        try:
-            self._log.debug("Checkbox pressed: %s", current_row)
-
-            if hasattr(self._data_table, "get_row_checks") and callable(
-                self._data_table.get_row_checks
-            ):
-                self._selected_rows = self._data_table.get_row_checks()
-                self._log.debug("All selected rows: %s", self._selected_rows)
-            else:
-                if current_row and len(current_row) > 0:
-                    if current_row in self._selected_rows:
-                        self._selected_rows.remove(current_row)
-                        self._log.debug("Unchecked row: %s", current_row)
-                    else:
-                        self._selected_rows.append(current_row)
-                        self._log.debug("Checked row: %s", current_row)
-                    self._log.debug("Selected rows: %s", self._selected_rows)
-
-        except Exception as e:  # pragma: no cover - defensive
-            self._log.warning("Checkbox handler error: %s", e)
-            self._selected_rows = []
+    # Selection assistance – track last row passed for removal when invoking dialog
+    def _prepare_and_remove(self, rows):  # pragma: no cover - UI event
+        self._selected_rows = list(rows)
+        self._show_remove_confirmation(self._selected_rows)
 
     def _show_add_dialog(self):
         """Show dialog to add new system value."""
@@ -205,6 +174,35 @@ class ValueStoreTab(MDBoxLayout, MDTabsBase):
             return True
         except Exception as e:  # pragma: no cover - defensive
             self._log.error("Error adding system value: %s", e)
+            return False
+
+    # Inline create helpers -------------------------------------------
+    def _validate_inline_channel(self, text: str) -> bool:  # pragma: no cover
+        if not text.isdigit():
+            return False
+        ch = int(text)
+        if not (1 <= ch <= value_store.size()):
+            return False
+        # Accept if not already configured
+        return ch not in getattr(value_store, "_channel_values", {})
+
+    def _inline_add_channel(self, text: str):  # pragma: no cover
+        try:
+            ch = int(text)
+            if not (1 <= ch <= value_store.size()):
+                return False
+            if ch in getattr(value_store, "_channel_values", {}):
+                return False
+            value_store._channel_values[ch] = {  # type: ignore[attr-defined]
+                "control_type": "unipolar",
+                "device_path": "manual",
+                "control_code": f"manual_{ch}",
+            }
+            value_store.save_configuration()
+            self._refresh_table()
+            return True
+        except Exception as e:  # pragma: no cover
+            self._log.error("Inline add failed: %s", e)
             return False
 
     def _remove_system_values(self, selected_rows):
@@ -270,22 +268,7 @@ class ValueStoreTab(MDBoxLayout, MDTabsBase):
             return False
 
     # New action provider for global FAB menu
-    def get_actions(self):  # pragma: no cover (UI integration)
-        """Return list of unique action dicts for this tab.
-
-        Each action: { 'text': str, 'callback': callable }
-        Text values are unique across tabs for testing.
-        """
-        return [
-            {"text": "Values: Add", "callback": self._show_add_dialog, "icon": "plus"},
-            {
-                "text": "Values: Remove Selected",
-                "callback": lambda: self._show_remove_confirmation(self._selected_rows),
-                "icon": "delete",
-            },
-            {
-                "text": "Values: Refresh",
-                "callback": self._refresh_table,
-                "icon": "refresh",
-            },
-        ]
+    def get_actions(self):  # pragma: no cover - delegate to generic table
+        if self._table:
+            return self._table.get_actions()
+        return []

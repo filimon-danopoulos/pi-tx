@@ -8,7 +8,6 @@ def test_parse_model_dict_basic_and_channel_skip(tmp_path):
     data = {
         "model_id": uuid.uuid4().hex,
         "rx_num": 20,  # will be clamped to 15
-        "model_index": "3",
         "channels": {
             "ch1": {
                 "control_type": "unipolar",
@@ -26,7 +25,6 @@ def test_parse_model_dict_basic_and_channel_skip(tmp_path):
     m = parse_model_dict("demo", data)
     assert m.name == "demo"
     assert m.rx_num == 15  # clamped
-    assert m.model_index == 3
     # channel 1 and 2 present; 'bad' skipped
     assert set(m.channels.keys()) == {1, 2}
     assert m.channels[2].control_type == "bipolar"
