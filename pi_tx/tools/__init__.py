@@ -10,6 +10,9 @@ Commands:
 
 from __future__ import annotations
 import sys
+from ..logging_config import get_logger
+
+log = get_logger(__name__)
 
 from . import create_model as _create_model
 from . import map_stick as _map_stick
@@ -24,15 +27,15 @@ def main(argv: list[str] | None = None):  # pragma: no cover
     if argv is None:
         argv = sys.argv[1:]
     if not argv or argv[0] in {"-h", "--help", "help"}:
-        print(__doc__.strip())
-        print("\nAvailable:")
+        log.info(__doc__.strip())
+        log.info("Available:")
         for name in sorted(COMMANDS):
-            print(f"  {name}")
+            log.info("  %s", name)
         return 0
     cmd = argv[0]
     handler = COMMANDS.get(cmd)
     if not handler:
-        print(f"Unknown command: {cmd}\nUse --help to list")
+        log.error("Unknown command: %s (use --help to list)", cmd)
         return 1
     return handler(argv[1:])
 

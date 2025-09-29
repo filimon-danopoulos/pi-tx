@@ -9,11 +9,12 @@ from kivymd.uix.datatables import MDDataTable
 from kivymd.uix.tab import MDTabs, MDTabsBase
 from kivymd.uix.button import MDRaisedButton
 from kivy.metrics import dp
+from ...logging_config import get_logger
 from kivy.clock import Clock
 import threading
 from datetime import datetime
 
-from ..services.model_manager import ModelManager
+from ...gui.services.model_manager import ModelManager
 from ...domain.model_json import Model
 from ...config.settings import STICK_MAPPING_FILE
 from ...infrastructure.file_cache import load_json
@@ -170,9 +171,9 @@ class SettingsTab(MDBoxLayout, MDTabsBase):
             repo = self.parent_view._model_manager._repo
             repo.save_model(model)
 
-            print(f"Saved bind timestamp for model {model.name}")
+            get_logger(__name__).info("Saved bind timestamp for model %s", model.name)
         except Exception as e:
-            print(f"Error saving bind timestamp: {e}")
+            get_logger(__name__).warning("Error saving bind timestamp: %s", e)
 
     def _is_model_bound(self) -> bool:
         """Check if current model has been bound."""

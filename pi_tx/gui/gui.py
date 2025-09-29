@@ -13,6 +13,9 @@ from kivymd.uix.list import OneLineIconListItem, IconLeftWidget
 from kivy.properties import StringProperty
 from kivy.factory import Factory
 from kivy.metrics import dp
+from ..logging_config import get_logger
+
+log = get_logger(__name__)
 
 from ..domain.channel_store import channel_store
 from ..input.controls import InputController
@@ -73,7 +76,7 @@ class PiTxApp(MDApp):
             self._actions_menu = None
             self._navigation_rail = nav
         except Exception as e:  # pragma: no cover
-            print(f"Navigation init failed: {e}")
+            log.error("Navigation init failed: %s", e)
             self._navigation_rail = None
         Clock.schedule_once(lambda *_: self.refresh_models(), 0)
         Clock.schedule_interval(self._input_pump.tick, 1.0 / 100.0)
@@ -107,7 +110,7 @@ class PiTxApp(MDApp):
             if hasattr(view_obj, "get_actions"):
                 return view_obj.get_actions() or []
         except Exception as e:
-            print(f"Error collecting actions: {e}")
+            log.warning("Error collecting actions: %s", e)
         return []
 
     def _open_global_actions_menu(self, *args):  # pragma: no cover
@@ -151,7 +154,7 @@ class PiTxApp(MDApp):
             try:
                 func()
             except Exception as e:
-                print(f"Action error: {e}")
+                log.error("Action error: %s", e)
 
         return _inner
 
@@ -180,7 +183,7 @@ class PiTxApp(MDApp):
             if name:
                 Clock.schedule_once(lambda *_: self.select_model(name), 0)
         except Exception as e:
-            print(f"Warning: failed to autoload last model: {e}")
+            log.warning("Failed to autoload last model: %s", e)
 
     def select_model(self, model_name: str):
         if self._selecting_model:
@@ -215,6 +218,7 @@ def create_gui(input_controller: InputController):
 
 class ActionMenuItem(OneLineIconListItem):  # pragma: no cover - UI component
     """Menu list item with optional left icon for dropdown actions."""
+
     icon = StringProperty("")
 
     def __init__(self, **kwargs):
@@ -229,7 +233,7 @@ class ActionMenuItem(OneLineIconListItem):  # pragma: no cover - UI component
                 self._icon_widget = IconLeftWidget(icon=self.icon)
                 self.add_widget(self._icon_widget)
             except Exception as e:
-                print(f"Failed adding icon to menu item: {e}")
+                log.warning("Failed adding icon to menu item: %s", e)
 
 
 Factory.register("ActionMenuItem", cls=ActionMenuItem)

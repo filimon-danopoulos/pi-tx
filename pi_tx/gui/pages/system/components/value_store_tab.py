@@ -7,6 +7,7 @@ from kivymd.uix.floatlayout import MDFloatLayout
 from kivy.metrics import dp
 
 from .....domain.value_store import value_store
+from .....logging_config import get_logger
 from .dialogs.value_add_dialog import ValueAddDialog
 from .dialogs.value_remove_dialog import ValueRemoveDialog
 
@@ -26,11 +27,14 @@ class ValueStoreTab(MDBoxLayout, MDTabsBase):
         # Ensure tab fills available space
         self.size_hint = (1, 1)
 
+        # Logger
+        self._log = get_logger(__name__)
+
+        # Table and selection state
         self._data_table = None
         self._table_data = []
         self._selected_rows = []  # Track multiple selected rows
-
-        # Initialize dialogs
+        # Dialog references
         self._add_dialog = None
         self._remove_dialog = None
 
@@ -40,14 +44,8 @@ class ValueStoreTab(MDBoxLayout, MDTabsBase):
         # Create the table immediately
         self._create_data_table()
 
-        # FAB removed; keep placeholder attribute to avoid attribute errors
-        self._fab = None
-
         # Add the float layout to the main container
         self.add_widget(self._float_layout)
-
-        # FAB state logic removed (no-op now)
-        self._update_fab_state()
 
     def _create_data_table(self):
         """Create the data table as the only content."""
@@ -135,44 +133,37 @@ class ValueStoreTab(MDBoxLayout, MDTabsBase):
         self._data_table.row_data = self._table_data
         # Clear selection when refreshing
         self._selected_rows = []
-        self._update_fab_state()  # no-op
 
     def _on_row_selected(self, instance, row):  # noqa: D401
         """Handle row selection in the data table (no extra logic)."""
         try:
-            print(f"Row selected (CellRow object): {row} (type: {type(row)})")
+            self._log.debug("Row selected: %s (type: %s)", row, type(row))
         except Exception as e:  # pragma: no cover - defensive
-            print(f"Error in row selection handler: {e}")
+            self._log.warning("Row selection handler error: %s", e)
 
     def _on_checkbox_press(self, instance, current_row):  # noqa: D401
         """Handle checkbox press events."""
         try:
-            print(f"Checkbox pressed for row: {current_row}")
+            self._log.debug("Checkbox pressed: %s", current_row)
 
             if hasattr(self._data_table, "get_row_checks") and callable(
                 self._data_table.get_row_checks
             ):
                 self._selected_rows = self._data_table.get_row_checks()
-                print(f"All selected rows: {self._selected_rows}")
+                self._log.debug("All selected rows: %s", self._selected_rows)
             else:
                 if current_row and len(current_row) > 0:
                     if current_row in self._selected_rows:
                         self._selected_rows.remove(current_row)
-                        print(f"Unchecked row: {current_row}")
+                        self._log.debug("Unchecked row: %s", current_row)
                     else:
                         self._selected_rows.append(current_row)
-                        print(f"Checked row: {current_row}")
-                    print(f"Selected rows: {self._selected_rows}")
+                        self._log.debug("Checked row: %s", current_row)
+                    self._log.debug("Selected rows: %s", self._selected_rows)
 
-            self._update_fab_state()  # no-op
         except Exception as e:  # pragma: no cover - defensive
-            print(f"Error in checkbox handler: {e}")
+            self._log.warning("Checkbox handler error: %s", e)
             self._selected_rows = []
-            self._update_fab_state()  # no-op
-
-    def _update_fab_state(self):  # noqa: D401
-        """FAB removed: method retained as no-op for compatibility."""
-        return
 
     def _show_add_dialog(self):
         """Show dialog to add new system value."""
@@ -186,7 +177,7 @@ class ValueStoreTab(MDBoxLayout, MDTabsBase):
     def _show_remove_confirmation(self, selected_rows):
         """Show confirmation dialog for removing selected system values."""
         if not selected_rows:
-            print("No rows selected for removal")
+            self._log.info("No rows selected for removal")
             return
 
         if not self._remove_dialog:
@@ -200,7 +191,7 @@ class ValueStoreTab(MDBoxLayout, MDTabsBase):
         """Add a new system value based on user input."""
         try:
             if not hasattr(value_store, "_channel_values"):
-                print("Value store not properly initialized")
+                self._log.error("Value store not initialized")
                 return False
 
             value_store._channel_values[channel_num] = {  # type: ignore[attr-defined]
@@ -210,17 +201,17 @@ class ValueStoreTab(MDBoxLayout, MDTabsBase):
             }
             value_store.save_configuration()
             self._refresh_table()
-            print(f"Added system value for channel {channel_num}")
+            self._log.info("Added system value for channel %s", channel_num)
             return True
         except Exception as e:  # pragma: no cover - defensive
-            print(f"Error adding system value: {e}")
+            self._log.error("Error adding system value: %s", e)
             return False
 
     def _remove_system_values(self, selected_rows):
         """Remove multiple selected system values."""
         try:
             if not selected_rows:
-                print("No rows selected for removal")
+                self._log.info("No rows selected for removal")
                 return
 
             removed_channels = []
@@ -231,7 +222,7 @@ class ValueStoreTab(MDBoxLayout, MDTabsBase):
                     if isinstance(row, (list, tuple)) and len(row) > 0:
                         row_id = row[0]
                     else:
-                        print(f"Invalid row selection format: {row}")
+                        self._log.warning("Invalid row selection format: %s", row)
                         failed_removals.append(str(row))
                         continue
 
@@ -245,31 +236,37 @@ class ValueStoreTab(MDBoxLayout, MDTabsBase):
                         value_store.set_reverse(channel_num, False)
                         value_store.save_configuration()
                         removed_channels.append(channel_num)
-                        print(f"Removed system value for channel {channel_num}")
+                        self._log.info(
+                            "Removed system value for channel %s", channel_num
+                        )
                     else:
-                        print(f"Cannot determine channel number from row ID: {row_id}")
+                        self._log.warning(
+                            "Cannot determine channel number from row ID: %s", row_id
+                        )
                         failed_removals.append(str(row_id))
                 except (ValueError, IndexError) as e:
-                    print(f"Error processing row {row}: {e}")
+                    self._log.warning("Error processing row %s: %s", row, e)
                     failed_removals.append(str(row))
                     continue
 
             self._selected_rows = []
             self._refresh_table()
-            # _update_fab_state no-op retained for compatibility
-            self._update_fab_state()
 
             if removed_channels:
-                print(
-                    f"Successfully removed {len(removed_channels)} system values: channels {removed_channels}"
+                self._log.info(
+                    "Removed %d system values: %s",
+                    len(removed_channels),
+                    removed_channels,
                 )
             if failed_removals:
-                print(
-                    f"Failed to remove {len(failed_removals)} items: {failed_removals}"
+                self._log.warning(
+                    "Failed to remove %d items: %s",
+                    len(failed_removals),
+                    failed_removals,
                 )
             return True
         except Exception as e:  # pragma: no cover - defensive
-            print(f"Error removing system values: {e}")
+            self._log.error("Error removing system values: %s", e)
             return False
 
     # New action provider for global FAB menu

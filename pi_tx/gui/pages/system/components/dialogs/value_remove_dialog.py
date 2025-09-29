@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from kivymd.uix.dialog import MDDialog
 from kivymd.uix.button import MDFlatButton, MDRaisedButton
+from ......logging_config import get_logger
 
 
 class ValueRemoveDialog:
@@ -12,11 +13,12 @@ class ValueRemoveDialog:
         self.on_cancel = on_cancel
         self.dialog = None
         self.selected_rows = None
+        self._log = get_logger(__name__)
 
     def show_dialog(self, selected_rows):
         """Show the remove confirmation dialog for selected system values."""
         if not selected_rows:
-            print("No rows selected for removal")
+            self._log.info("No rows selected for removal")
             return
 
         self.selected_rows = selected_rows
@@ -28,11 +30,11 @@ class ValueRemoveDialog:
                 if isinstance(row, (list, tuple)) and len(row) > 0:
                     row_ids.append(row[0])  # ID column at index 0
                 else:
-                    print(f"Invalid row selection format: {row}")
+                    self._log.warning("Invalid row selection format: %s", row)
                     return
 
             if not row_ids:
-                print("No valid rows to remove")
+                self._log.info("No valid rows to remove")
                 return
 
             # Create confirmation message
@@ -43,7 +45,7 @@ class ValueRemoveDialog:
                 confirmation_text = f"Are you sure you want to remove {len(row_ids)} system values?\n\n{row_list}"
 
         except Exception as e:
-            print(f"Error processing selected rows: {e}")
+            self._log.error("Error processing selected rows: %s", e)
             return
 
         # Create confirmation dialog
@@ -62,7 +64,7 @@ class ValueRemoveDialog:
                 ),
             ],
         )
-        
+
         self.dialog.open()
 
     def close_dialog(self):

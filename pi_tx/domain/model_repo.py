@@ -6,6 +6,7 @@ from pathlib import Path
 
 from .model_json import Model, parse_model_dict
 from ..infrastructure.file_cache import load_json, save_json
+from ..logging_config import get_logger
 
 MODELS_DIR_DEFAULT = "models"
 
@@ -13,6 +14,7 @@ MODELS_DIR_DEFAULT = "models"
 class ModelRepository:
     def __init__(self, models_dir: str = MODELS_DIR_DEFAULT):
         self.models_dir = models_dir
+        self._log = get_logger(self.__class__.__name__)
 
     def list_models(self) -> List[str]:
         if not os.path.isdir(self.models_dir):
@@ -23,14 +25,14 @@ class ModelRepository:
 
     def load_model(self, name: str) -> Model:
         path = os.path.join(self.models_dir, f"{name}.json")
-        
+
         # Use file cache to load model data
         data = load_json(path, default_value={})
-        
+
         # If file doesn't exist, return default model
         if not data:
             return Model(name=name, channels={}, processors={})
-        
+
         return parse_model_dict(name, data)
 
     def save_model(self, model: Model) -> None:
@@ -67,4 +69,7 @@ class ModelRepository:
 
         # Use file cache to save model
         save_json(path, model_dict)
-        print(f"Saved model to {path}")
+        self._log.info(
+            "Saved model",
+            extra={"path": path, "channels": len(model.channels)},
+        )

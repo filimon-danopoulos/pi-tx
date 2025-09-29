@@ -7,6 +7,7 @@ Configuration is loaded from system_values.json file.
 import os
 from typing import List, Dict, Any, Mapping
 from ..infrastructure.file_cache import load_json, save_json
+from ..logging_config import get_logger
 
 
 class ValueStore:
@@ -44,6 +45,9 @@ class ValueStore:
         self._stick_mapping_path = os.path.join(
             os.path.dirname(__file__), "..", "input", "mappings", "stick_mapping.json"
         )
+
+        # Logging
+        self._log = get_logger(self.__class__.__name__)
 
         # Load configuration
         self._load_stick_mapping()
@@ -108,7 +112,7 @@ class ValueStore:
                         pass  # Skip invalid channel numbers
 
         except Exception as e:
-            print(f"ValueStore: failed to load config: {e}")
+            self._log.warning("Failed to load config", exc_info=e)
             # Create default configuration if loading fails
             self._create_default_config()
 
@@ -117,10 +121,14 @@ class ValueStore:
         try:
             self._stick_mapping = load_json(self._stick_mapping_path)
             if self._stick_mapping is None:
-                print(f"ValueStore: stick mapping not found at {self._stick_mapping_path}")
+                self._log.info(
+                    "Stick mapping missing", extra={"path": self._stick_mapping_path}
+                )
         except Exception as e:
-            print(
-                f"ValueStore: failed to load stick mapping from {self._stick_mapping_path}: {e}"
+            self._log.error(
+                "Failed to load stick mapping",
+                exc_info=e,
+                extra={"path": self._stick_mapping_path},
             )
 
     def _create_default_config(self):
@@ -130,7 +138,7 @@ class ValueStore:
         try:
             save_json(self._config_path, default_config)
         except Exception as e:
-            print(f"ValueStore: failed to create default config: {e}")
+            self._log.error("Failed to create default config", exc_info=e)
 
     def save_configuration(self):
         """Save current configuration to system_values.json file."""
@@ -148,7 +156,7 @@ class ValueStore:
         try:
             save_json(self._config_path, config)
         except Exception as e:
-            print(f"ValueStore: failed to save config: {e}")
+            self._log.error("Failed to save config", exc_info=e)
 
     def configure_reverse(self, reverse_config: Dict[str, bool]):
         """Configure reverse flags for specific channels.
@@ -163,12 +171,16 @@ class ValueStore:
                     ch_num = int(key[3:])  # Extract number from "var1", "var2", etc.
                     idx = ch_num - 1
                 else:
-                    raise ValueError(f"Invalid reverse key format {key}, expected 'var1' format")
-                    
+                    raise ValueError(
+                        f"Invalid reverse key format {key}, expected 'var1' format"
+                    )
+
                 if 0 <= idx < len(self._reverse_flags) and isinstance(val, bool):
                     self._reverse_flags[idx] = val
             except (ValueError, TypeError) as e:
-                print(f"ValueStore: bad reverse entry {key}: {e}")
+                self._log.debug(
+                    "Bad reverse entry", extra={"key": key, "error": str(e)}
+                )
         self._recompute()
 
     def configure_channel_types(self, channel_types: Dict[str, str]):
@@ -184,13 +196,17 @@ class ValueStore:
                     ch_num = int(key[3:])  # Extract number from "var1", "var2", etc.
                     idx = ch_num - 1
                 else:
-                    raise ValueError(f"Invalid channel_types key format {key}, expected 'var1' format")
-                    
+                    raise ValueError(
+                        f"Invalid channel_types key format {key}, expected 'var1' format"
+                    )
+
                 if 0 <= idx < len(self._channel_types) and isinstance(val, str):
                     if val in ["bipolar", "unipolar"]:
                         self._channel_types[idx] = val
             except (ValueError, TypeError) as e:
-                print(f"ValueStore: bad channel_type entry {key}: {e}")
+                self._log.debug(
+                    "Bad channel_type entry", extra={"key": key, "error": str(e)}
+                )
         self._recompute()
 
     def set_reverse(self, channel: int, reverse: bool):

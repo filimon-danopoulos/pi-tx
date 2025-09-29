@@ -8,6 +8,7 @@ from kivy.metrics import dp
 from kivy.clock import Clock
 import threading
 from datetime import datetime
+from .....logging_config import get_logger
 
 
 class SettingsTab(MDBoxLayout, MDTabsBase):
@@ -17,7 +18,8 @@ class SettingsTab(MDBoxLayout, MDTabsBase):
         super().__init__(orientation="vertical", padding=16, spacing=8, **kwargs)
         self.title = "Settings"
         self.icon = "cog"
-        
+        self._log = get_logger(__name__)
+
         self._current_model = None
         self._model_manager = None
 
@@ -64,7 +66,7 @@ class SettingsTab(MDBoxLayout, MDTabsBase):
             return
 
         model = self._current_model
-        if hasattr(model, 'bind_timestamp') and model.bind_timestamp:
+        if hasattr(model, "bind_timestamp") and model.bind_timestamp:
             self._bind_button.text = "Rebind Model"
             self._bind_button.icon = "link-variant-plus"
             self._status_label.text = (
@@ -157,15 +159,15 @@ class SettingsTab(MDBoxLayout, MDTabsBase):
             repo = self._model_manager._repo
             repo.save_model(model)
 
-            print(f"Saved bind timestamp for model {model.name}")
+            self._log.info("Saved bind timestamp for model %s", model.name)
         except Exception as e:
-            print(f"Error saving bind timestamp: {e}")
+            self._log.error("Error saving bind timestamp: %s", e)
 
     def _is_model_bound(self) -> bool:
         """Check if current model has been bound."""
         if not self._current_model:
             return False
-        return bool(getattr(self._current_model, 'bind_timestamp', None))
+        return bool(getattr(self._current_model, "bind_timestamp", None))
 
     def _reset_status(self):
         """Reset status label to default."""
@@ -181,6 +183,14 @@ class SettingsTab(MDBoxLayout, MDTabsBase):
     # Actions for global FAB menu
     def get_actions(self):  # pragma: no cover (UI integration)
         return [
-            {"text": "Model Settings: Bind/Rebind", "callback": lambda: self._on_bind_pressed(self._bind_button), "icon": "link-variant"},
-            {"text": "Model Settings: Refresh Status", "callback": self._update_bind_button_text, "icon": "refresh"},
+            {
+                "text": "Model Settings: Bind/Rebind",
+                "callback": lambda: self._on_bind_pressed(self._bind_button),
+                "icon": "link-variant",
+            },
+            {
+                "text": "Model Settings: Refresh Status",
+                "callback": self._update_bind_button_text,
+                "icon": "refresh",
+            },
         ]

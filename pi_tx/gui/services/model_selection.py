@@ -1,5 +1,6 @@
 from __future__ import annotations
 from typing import Dict, Tuple, Optional, Callable
+from ...logging_config import get_logger
 from .model_manager import ModelManager, Model
 
 
@@ -27,6 +28,7 @@ class ModelSelectionController:
         self._input = input_controller
         self._panel = channel_panel
         self._uart_resolver = uart_resolver or self._default_uart_resolver
+        self._log = get_logger(__name__)
 
     def set_channel_panel(self, panel):
         self._panel = panel
@@ -53,10 +55,12 @@ class ModelSelectionController:
                             device_path, control_code, ch_id
                         )
                     except Exception as e:  # pragma: no cover (defensive per mapping)
-                        print(f"Failed to register mapping for channel {channel}: {e}")
+                        self._log.warning(
+                            "Failed to register mapping for channel %s: %s", channel, e
+                        )
                 self._input.start()
             except Exception as e:  # pragma: no cover
-                print(f"Input mapping apply failed: {e}")
+                self._log.warning("Input mapping apply failed: %s", e)
         # Persist selection
         self._model_manager.persist_last(model_name)
         # Propagate identifiers to UART transmitter if available
@@ -74,7 +78,7 @@ class ModelSelectionController:
             if hasattr(uart, "set_model_id"):
                 uart.set_model_id(getattr(model, "model_id", None))
         except Exception as e:
-            print(f"Warning: could not apply rx_num/model_id to transmitter: {e}")
+            self._log.warning("Could not apply rx_num/model_id to transmitter: %s", e)
 
     @staticmethod
     def _default_uart_resolver():  # pragma: no cover

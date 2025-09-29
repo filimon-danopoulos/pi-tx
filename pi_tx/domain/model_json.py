@@ -3,6 +3,7 @@ from __future__ import annotations
 import uuid
 from typing import Any, Dict
 from dataclasses import dataclass, field
+from ..logging_config import get_logger
 
 # Core data structures kept here so parsing module can be imported standalone
 
@@ -54,6 +55,7 @@ def parse_model_dict(name: str, data: Dict[str, Any]) -> Model:
         rx_num = 15
 
     parsed: Dict[int, ChannelConfig] = {}
+    log = get_logger(__name__)
     for key, cfg in raw.items():
         try:
             # Expect ch1 format only
@@ -75,7 +77,7 @@ def parse_model_dict(name: str, data: Dict[str, Any]) -> Model:
                 control_name=cfg.get("control_name", ""),
             )
         except Exception as e:
-            print(f"ModelParser: skipping channel {key}: {e}")
+            log.warning("Skipping channel %s: %s", key, e)
     return Model(
         name=name,
         channels=parsed,

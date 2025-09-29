@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any, Callable, Dict, List, Mapping
+from ..logging_config import get_logger
 
 
 class ChannelStore:
@@ -15,6 +16,7 @@ class ChannelStore:
         # Each mix aggregates abs(source)*weight (weights 0..1) and stores
         # clamped 0..1 result into target (or first source if no target).
         self._aggregates: List[tuple[List[tuple[int, float]], int | None]] = []
+        self._log = get_logger(self.__class__.__name__)
         self._build_pipeline()
 
     def _build_pipeline(self):
@@ -110,11 +112,11 @@ class ChannelStore:
                     if 0 <= idx < len(self._reverse_flags) and isinstance(val, bool):
                         self._reverse_flags[idx] = val
                 else:
-                    print(
-                        f"ChannelStore: invalid reverse key format {key}, expected 'ch1' format"
-                    )
+                    self._log.debug("Invalid reverse key format", extra={"key": key})
             except Exception as e:
-                print(f"ChannelStore: bad reverse entry {key}: {e}")
+                self._log.debug(
+                    "Bad reverse entry", extra={"key": key, "error": str(e)}
+                )
         diff_cfg = processors_cfg.get("differential")
         if isinstance(diff_cfg, list):
             parsed: List[tuple[int, int, bool]] = []
@@ -236,7 +238,10 @@ class ChannelStore:
                 inv = bool(m.get("inverse", False))
                 parsed.append((s, t, inv))
             except Exception as e:
-                print(f"ChannelStore: skipping differential mix {m}: {e}")
+                self._log.debug(
+                    "Skipping differential mix",
+                    extra={"mix": m, "error": str(e)},
+                )
                 continue
         self._differential_mixes = parsed
         self._build_pipeline()
@@ -278,7 +283,10 @@ class ChannelStore:
             try:
                 cur = proc(cur)
             except Exception as e:
-                print(f"ChannelStore: processor failed: {e}")
+                self._log.error(
+                    "Processor failure",
+                    extra={"processor": proc.__name__, "error": str(e)},
+                )
         self._derived[:] = cur
 
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 from pathlib import Path
 from typing import Dict, Tuple, Optional
+from ...logging_config import get_logger
 from ...domain.model_repo import ModelRepository, Model
 from ...domain.channel_store import channel_store
 from ...config.settings import MODELS_DIR, LAST_MODEL_FILE
@@ -21,6 +22,7 @@ class ModelManager:
         self._repo = ModelRepository(models_dir)
         self._last_model_file = last_model_file
         self._model_cache: Dict[str, Model] = {}  # Cache parsed models
+        self._log = get_logger(__name__)
 
     def list_models(self):
         return self._repo.list_models()
@@ -33,7 +35,7 @@ class ModelManager:
             # Load from file and cache
             model = self._repo.load_model(model_name)
             self._model_cache[model_name] = model
-            
+
         # Configure channel types first
         try:
             types_map = {
@@ -41,13 +43,13 @@ class ModelManager:
             }
             channel_store.configure_channel_types(types_map)
         except Exception as e:  # pragma: no cover (defensive)
-            print(f"Warning: failed to configure channel types: {e}")
+            self._log.warning("Failed to configure channel types: %s", e)
         # Processors
         try:
             channel_store.configure_processors(model.processors)
         except Exception as e:  # pragma: no cover
-            print(
-                f"Warning: failed to configure processors for model {model_name}: {e}"
+            self._log.warning(
+                "Failed to configure processors for model %s: %s", model_name, e
             )
         mapping = {
             str(k): {
@@ -76,7 +78,7 @@ class ModelManager:
             with open(self._last_model_file, "w") as f:
                 f.write(model_name.strip())
         except Exception as e:  # pragma: no cover
-            print(f"Warning: couldn't persist last model: {e}")
+            self._log.warning("Couldn't persist last model: %s", e)
 
     def autoload_last(self):
         try:
@@ -85,5 +87,5 @@ class ModelManager:
                 if name and name in self.list_models():
                     return name
         except Exception as e:  # pragma: no cover
-            print(f"Warning: failed to read last model: {e}")
+            self._log.warning("Failed to read last model: %s", e)
         return None

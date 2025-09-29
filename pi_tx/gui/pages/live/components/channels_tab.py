@@ -14,7 +14,7 @@ class ChannelsTab(MDBoxLayout, MDTabsBase):
         super().__init__(orientation="vertical", **kwargs)
         self.title = "Channels"
         self.icon = "chart-line"
-        
+
         # Ensure tab fills available space
         self.size_hint = (1, 1)
         self.spacing = 0
@@ -22,7 +22,7 @@ class ChannelsTab(MDBoxLayout, MDTabsBase):
 
         # Create the channel panel (keeping the existing UI intact)
         self.channel_panel = ChannelPanel()
-        
+
         # Put it in a scroll view
         scroll = ScrollView()
         scroll.add_widget(self.channel_panel)
@@ -38,7 +38,9 @@ class ChannelsTab(MDBoxLayout, MDTabsBase):
         return [
             {
                 "text": "Live: Refresh Now",
-                "callback": lambda: self.update_values(getattr(self.channel_panel, 'last_snapshot', {})),
+                "callback": lambda: self.update_values(
+                    getattr(self.channel_panel, "last_snapshot", {})
+                ),
                 "icon": "refresh",
             },
         ]

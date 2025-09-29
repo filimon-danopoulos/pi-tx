@@ -11,6 +11,7 @@ from pathlib import Path
 from .dialogs.model_create_dialog import ModelCreateDialog
 from .dialogs.model_remove_dialog import ModelRemoveDialog
 from .....infrastructure.file_cache import load_json, save_json
+from .....logging_config import get_logger
 
 
 class ModelsTab(MDBoxLayout, MDTabsBase):
@@ -18,6 +19,10 @@ class ModelsTab(MDBoxLayout, MDTabsBase):
 
     def __init__(self, app=None, **kwargs):
         super().__init__(orientation="vertical", **kwargs)
+        # Instance logger
+        self._log = get_logger(__name__)
+
+        # Basic properties
         self.title = "Models"
         self.icon = "folder-multiple"
         self.app = app
@@ -25,9 +30,11 @@ class ModelsTab(MDBoxLayout, MDTabsBase):
         self.spacing = 0
         self.padding = 0
 
+        # Dialog references
         self.remove_dialog = None
         self.create_dialog = None
 
+        # Data / state holders
         self._selected_models = set()
         self._table_data = []
 
@@ -37,14 +44,10 @@ class ModelsTab(MDBoxLayout, MDTabsBase):
         # Create the data table immediately
         self._create_data_table()
 
-        # FAB removed; placeholder attribute to avoid attribute errors
-        self._fab = None
-
         # Add the float layout to the main container
         self.add_widget(self._float_layout)
 
         # FAB state logic removed (no-op retained for compatibility)
-        self._update_fab_state()
 
     def _create_data_table(self):
         """Create the data table as the main content."""
@@ -145,9 +148,6 @@ class ModelsTab(MDBoxLayout, MDTabsBase):
         # Clear selection when refreshing
         self._selected_models.clear()
 
-        # Update FAB state after refreshing
-        self._update_fab_state()  # no-op
-
     def _on_row_selected(self, instance, row):  # noqa: D401
         """Handle row selection in the data table."""
         # Row selection is now just for display - model activation is separate
@@ -170,13 +170,6 @@ class ModelsTab(MDBoxLayout, MDTabsBase):
         else:
             self._selected_models.add(display_name)
 
-        # Update FAB state
-        self._update_fab_state()  # no-op
-
-    def _update_fab_state(self):  # noqa: D401
-        """FAB removed: no-op retained for compatibility."""
-        return
-
     def _on_model_changed(self, app, model_name):
         """Called when a model is selected to refresh the display."""
         self.refresh_models()
@@ -187,7 +180,6 @@ class ModelsTab(MDBoxLayout, MDTabsBase):
         self._data_table.row_data = self._table_data
         # Clear selection when refreshing
         self._selected_models.clear()
-        self._update_fab_state()  # no-op
 
     def _show_remove_model_dialog(self, *args):
         """Show confirmation dialog to remove the selected models."""
@@ -249,7 +241,7 @@ class ModelsTab(MDBoxLayout, MDTabsBase):
                 self.app.select_model(first_model)
 
         except Exception as e:
-            print(f"Error removing model: {e}")
+            self._log.warning("Error removing model: %s", e)
 
         self._close_remove_dialog()
 
@@ -302,7 +294,7 @@ class ModelsTab(MDBoxLayout, MDTabsBase):
             self._close_create_dialog()
 
         except Exception as e:
-            print(f"Error saving model: {str(e)}")
+            self._log.error("Error saving model: %s", e)
             # The dialog will handle displaying this error
             return False
 

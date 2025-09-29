@@ -1,6 +1,7 @@
 from __future__ import annotations
 from typing import Callable, Dict, Iterable, Tuple
 from ...domain.value_store import value_store
+from ...logging_config import get_logger
 
 
 class InputEventPump:
@@ -17,6 +18,7 @@ class InputEventPump:
     ):
         self._input = input_controller
         self._set_many = set_many
+        self._log = get_logger(__name__)
 
     def tick(self, *_):
         """Drain queued input events, keeping only latest per channel, then update store."""
@@ -30,7 +32,7 @@ class InputEventPump:
             ) in self._input.pop_events():  # expects iterable of (int,float)
                 last[ch_id] = value
         except Exception as e:  # pragma: no cover (defensive)
-            print(f"InputEventPump: failed reading events: {e}")
+            self._log.warning("Failed reading events: %s", e)
             return
         if not last:
             return
@@ -40,11 +42,11 @@ class InputEventPump:
             self._set_many(last)
             value_store.set_many(last)
         except Exception as e:  # pragma: no cover
-            print(f"InputEventPump: failed applying events: {e}")
+            self._log.warning("Failed applying events: %s", e)
 
     def start_input(self):  # convenience passthrough
         try:
             if self._input:
                 self._input.start()
         except Exception as e:  # pragma: no cover
-            print(f"InputEventPump: failed to start input controller: {e}")
+            self._log.warning("Failed to start input controller: %s", e)

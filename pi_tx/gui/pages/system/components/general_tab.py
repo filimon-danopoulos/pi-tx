@@ -3,6 +3,7 @@ from __future__ import annotations
 from kivymd.uix.boxlayout import MDBoxLayout
 from kivymd.uix.label import MDLabel
 from kivymd.uix.tab import MDTabsBase
+from .....logging_config import get_logger
 
 
 class GeneralTab(MDBoxLayout, MDTabsBase):
@@ -12,7 +13,7 @@ class GeneralTab(MDBoxLayout, MDTabsBase):
         super().__init__(orientation="vertical", padding=16, spacing=8, **kwargs)
         self.title = "General"
         self.icon = "cog"
-
+        self._log = get_logger(__name__)
         # Placeholder content for future system settings
         self.add_widget(
             MDLabel(
@@ -34,4 +35,4 @@ class GeneralTab(MDBoxLayout, MDTabsBase):
 
     def _show_info(self, *args):  # simple illustrative callback
         # Could be replaced with a dialog; for now just log
-        print("GeneralTab info action triggered")
+        self._log.info("GeneralTab info action triggered")

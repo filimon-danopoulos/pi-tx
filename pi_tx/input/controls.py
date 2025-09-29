@@ -5,6 +5,7 @@ from datetime import datetime
 from evdev import InputDevice, ecodes
 from pathlib import Path
 from ..infrastructure.file_cache import load_json
+from ..logging_config import get_logger
 
 
 class InputController:
@@ -27,10 +28,11 @@ class InputController:
         self._last_key_raw: dict[str, dict[int, int]] = {}
         self._event_queue: SimpleQueue[tuple[int, float]] = SimpleQueue()
         self._channel_map: dict[str, dict[int, int]] = {}
+        self._log = get_logger(__name__)
         try:
             self._mappings = load_json(mapping_file, {})
         except Exception:
-            print(f"Warning: Mapping file {mapping_file} not found")
+            self._log.warning("Mapping file %s not found", mapping_file)
             self._mappings = {}
         self._mapping_device_keys: list[str] = [
             k for k in self._mappings.keys() if k.startswith("/dev/input/")
@@ -45,8 +47,8 @@ class InputController:
                 self._mappings[real] = self._mappings[k]
                 added += 1
         if added and self._debug:
-            print(
-                f"InputController: added {added} realpath alias mapping(s) for joystick devices"
+            self._log.debug(
+                "Added %d realpath alias mapping(s) for joystick devices", added
             )
 
     def start(self):
@@ -56,7 +58,7 @@ class InputController:
         # Discover devices before starting thread so we can prime synchronously
         self._devices = self._discover()
         if not self._devices:
-            print("Input controller: no mapped input devices found.")
+            self._log.warning("No mapped input devices found")
             return False
         # Prime once before launching event loop
         self.prime_values()
@@ -92,10 +94,12 @@ class InputController:
                     if ch_id is not None:
                         self.enqueue_channel_value(ch_id, norm)
                     if self._debug:
-                        print(f"Primed ABS dev={dev.path} code={code} norm={norm:.3f}")
+                        self._log.debug(
+                            "Primed ABS dev=%s code=%s norm=%.3f", dev.path, code, norm
+                        )
         except Exception as e:
             if self._debug:
-                print(f"Priming failed: {e}")
+                self._log.debug("Priming failed: %s", e)
 
     def stop(self):
         if not self._thread:
@@ -145,13 +149,17 @@ class InputController:
             self._channel_map.setdefault(device_path, {})[event_code] = channel_id
         self._channel_map.setdefault(target_path, {})[event_code] = channel_id
         if self._debug:
-            print(
-                f"Registered channel {channel_id} code={event_code} for {device_path} (using {target_path})"
+            self._log.debug(
+                "Registered channel %s code=%s for %s (using %s)",
+                channel_id,
+                event_code,
+                device_path,
+                target_path,
             )
 
     def _discover(self):
         if not self._mapping_device_keys:
-            print("Input controller: no mapping device paths configured.")
+            self._log.warning("No mapping device paths configured")
             return []
         found: list[InputDevice] = []
         seen_real: set[str] = set()
@@ -165,15 +173,20 @@ class InputController:
                     dev.grab()
                 except Exception as e:
                     if self._debug:
-                        print(f"Non-exclusive access to {configured} -> {real}: {e}")
+                        self._log.debug(
+                            "Non-exclusive access to %s -> %s: %s", configured, real, e
+                        )
                 found.append(dev)
                 seen_real.add(real)
                 if self._debug:
-                    print(
-                        f"Opened mapped device {dev.name} via {configured} (real {real})"
+                    self._log.debug(
+                        "Opened mapped device %s via %s (real %s)",
+                        dev.name,
+                        configured,
+                        real,
                     )
             except Exception as e:
-                print(f"Mapping path {configured} unavailable: {e}")
+                self._log.warning("Mapping path %s unavailable: %s", configured, e)
         return found
 
     def _normalize_value(
@@ -246,8 +259,14 @@ class InputController:
                                 self.enqueue_channel_value(ch_id, norm)
                         if self._debug:
                             status = "changed" if last != norm else "filtered"
-                            print(
-                                f"{datetime.now().strftime('%H:%M:%S.%f')[:-3]} dev={dev.path} code={ev.code} raw={ev.value} norm={norm:.3f} {status}"
+                            self._log.debug(
+                                "%s dev=%s code=%s raw=%s norm=%.3f %s",
+                                datetime.now().strftime("%H:%M:%S.%f")[:-3],
+                                dev.path,
+                                ev.code,
+                                ev.value,
+                                norm,
+                                status,
                             )
         finally:
-            print("Input controller stopped")
+            self._log.info("Input controller stopped")

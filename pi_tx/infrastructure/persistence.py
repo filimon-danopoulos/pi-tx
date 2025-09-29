@@ -1,6 +1,8 @@
-from . import __package__  # noqa: F401
 from pathlib import Path
 from ..config.settings import LAST_MODEL_FILE
+from ..logging_config import get_logger
+
+log = get_logger(__name__)
 
 
 def read_last_model() -> str | None:
@@ -16,4 +18,4 @@ def write_last_model(name: str) -> None:
     try:
         LAST_MODEL_FILE.write_text(name.strip())
     except Exception as e:
-        print(f"Warning: failed to persist last model: {e}")
+        log.warning("Failed to persist last model: %s", e)

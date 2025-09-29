@@ -12,7 +12,7 @@ from .....infrastructure.file_cache import load_json
 
 class ChannelsTab(MDBoxLayout, MDTabsBase):
     """Tab containing the channels data table."""
-    
+
     # Pre-compute common dp values for better performance
     _column_widths = [dp(20), dp(35), dp(35), dp(25), dp(20)]
 
@@ -20,7 +20,7 @@ class ChannelsTab(MDBoxLayout, MDTabsBase):
         super().__init__(orientation="vertical", spacing=0, **kwargs)
         self.title = "Channels"
         self.icon = "view-list"
-        
+
         self._data_table = None
         self._table_data = []
         self._current_model = None
@@ -41,7 +41,7 @@ class ChannelsTab(MDBoxLayout, MDTabsBase):
         """Rebuild the content with channel data table."""
         # Clear all widgets
         self.clear_widgets()
-        
+
         if not self._current_model:
             self._show_error("No model selected")
             return
@@ -89,7 +89,7 @@ class ChannelsTab(MDBoxLayout, MDTabsBase):
 
         # Load stick mapping once (cached)
         stick_mapping = self._load_stick_mapping()
-        
+
         # Pre-allocate list for better performance
         channels = self._current_model.channels
         table_rows = []
@@ -121,13 +121,15 @@ class ChannelsTab(MDBoxLayout, MDTabsBase):
             control_code_str = str(channel.control_code)
 
             # Add row to batch
-            table_rows.append((
-                channel_name,
-                control_type,
-                device_display,
-                control_display,
-                control_code_str,
-            ))
+            table_rows.append(
+                (
+                    channel_name,
+                    control_type,
+                    device_display,
+                    control_display,
+                    control_code_str,
+                )
+            )
 
         # Batch assign all rows at once
         self._table_data.extend(table_rows)
@@ -153,5 +155,9 @@ class ChannelsTab(MDBoxLayout, MDTabsBase):
     # Actions for global FAB menu
     def get_actions(self):  # pragma: no cover (UI integration)
         return [
-            {"text": "Model Channels: Refresh", "callback": self.refresh_table, "icon": "refresh"},
+            {
+                "text": "Model Channels: Refresh",
+                "callback": self.refresh_table,
+                "icon": "refresh",
+            },
         ]
