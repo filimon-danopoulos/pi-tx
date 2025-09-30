@@ -62,14 +62,16 @@
       "ch4": false,
       "ch5": true,
       "ch6": false,
-      "ch7": true,
-      "ch8": false
+      "ch7": true
     },
     "endpoints": {
-      "ch1": {"min": -0.80, "max": 0.90},
-      "ch2": {"min": -1.00, "max": 1.00},
-      "ch3": {"min": -0.50, "max": 0.70},
-      "ch7": {"min": 0.00, "max": 1.00}
+      "ch1": {"min": -1.0, "max": 1.0},
+      "ch2": {"min": -1.0, "max": 1.0},
+      "ch3": {"min": -1.0, "max": 1.0},
+      "ch4": {"min": -1.0, "max": 1.0},
+      "ch5": {"min": -1.0, "max": 1.0},
+      "ch6": {"min": -1.0, "max": 1.0},
+      "ch7": {"min": -1.0, "max": 1.0}
     },
     "differential": [
       {

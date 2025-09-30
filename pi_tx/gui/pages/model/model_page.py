@@ -10,6 +10,7 @@ from ....domain.model_json import Model
 from .components.channels_tab import ChannelsTab
 from .components.settings_tab import SettingsTab
 from .components.modifiers_tab import ModifiersTab
+from .components.processors_tab import ProcessorsTab
 
 
 class ModelPage(MDBoxLayout):
@@ -29,23 +30,28 @@ class ModelPage(MDBoxLayout):
     def __init__(self, **kwargs):
         super().__init__(orientation="vertical", padding=0, spacing=0, **kwargs)
 
-        # Create tabs
+        # Create tabs container
         self._tabs = MDTabs()
 
-        # Create tab instances
+        # Instantiate tabs
         self._channels_tab = ChannelsTab()
         self._modifiers_tab = ModifiersTab()
+        self._processors_tab = ProcessorsTab()
         self._settings_tab = SettingsTab()
 
-        # Add tabs to the tab widget
-        self._tabs.add_widget(self._channels_tab)
-        self._tabs.add_widget(self._modifiers_tab)
-        self._tabs.add_widget(self._settings_tab)
+        # Register tabs
+        for tab in (
+            self._channels_tab,
+            self._modifiers_tab,
+            self._processors_tab,
+            self._settings_tab,
+        ):
+            self._tabs.add_widget(tab)
 
-        # Add tabs to main container
+        # Add to layout
         self.add_widget(self._tabs)
 
-        # Model manager for loading model details
+        # Model manager and current model state
         self._model_manager = ModelManager()
         self._current_model: Model | None = None
         self._current_model_name = "No Model Selected"
@@ -63,6 +69,7 @@ class ModelPage(MDBoxLayout):
             # Pass model to tabs
             self._channels_tab.set_model(self._current_model, self._model_manager)
             self._modifiers_tab.set_model(self._current_model, self._model_manager)
+            self._processors_tab.set_model(self._current_model, self._model_manager)
             self._settings_tab.set_model(self._current_model, self._model_manager)
 
             self._refresh_content()
@@ -79,6 +86,8 @@ class ModelPage(MDBoxLayout):
         self._channels_tab.refresh_table()
         if hasattr(self, "_modifiers_tab"):
             self._modifiers_tab.refresh_table()
+        if hasattr(self, "_processors_tab"):
+            self._processors_tab.refresh_table()
 
     def _show_error(self, error_msg: str):
         """Show an error message."""
