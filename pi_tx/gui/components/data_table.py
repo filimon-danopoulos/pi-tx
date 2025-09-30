@@ -56,6 +56,7 @@ class DataTable(MDBoxLayout):  # pragma: no cover - UI heavy
         columns: Sequence[ColumnSpec],
         row_provider: Callable[[], Iterable[Any]],
         row_actions_builder: Callable[[Any], Sequence[ActionItem]] | None = None,
+        row_action: Callable[[Any], None] | None = None,
         inline_create: InlineCreateConfig | None = None,
         global_actions: Sequence[GlobalAction] | None = None,
         add_actions_column: bool = True,
@@ -64,18 +65,23 @@ class DataTable(MDBoxLayout):  # pragma: no cover - UI heavy
         **kwargs,
     ):
         super().__init__(orientation="vertical", **kwargs)
+
+        # Core config
         self._columns = list(columns)
+
         self._row_provider = row_provider
         self._row_actions_builder = row_actions_builder
+        self._row_action = row_action
         self._inline_create = inline_create
         self._global_actions = list(global_actions) if global_actions else []
         self._add_actions_col = add_actions_column
         self._header_height = header_height
         self._row_height = row_height
-
-        self._row_widgets: list[MDBoxLayout] = []
+        # runtime state
+        self._row_widgets = []  # type: list[MDBoxLayout]
         self._context_menus = {}
 
+        # layout roots
         self._float_layout = MDFloatLayout()
         self.add_widget(self._float_layout)
         self._build()
@@ -185,6 +191,7 @@ class DataTable(MDBoxLayout):  # pragma: no cover - UI heavy
     def _add_row(self, row_data, index=0):
         from kivymd.uix.label import MDLabel  # local import to avoid circular
 
+        # Always use a plain layout for rows; activation only via gear icon.
         row = MDBoxLayout(
             orientation="horizontal",
             size_hint_y=None,
@@ -199,21 +206,40 @@ class DataTable(MDBoxLayout):  # pragma: no cover - UI heavy
                     text=value, halign="left", size_hint_x=col.size_hint_x, shorten=True
                 )
             )
-        if self._add_actions_col and self._row_actions_builder:
-            btn = MDIconButton(
-                icon="dots-vertical",
-                size_hint=(None, None),
-                size=(dp(28), dp(28)),
-                pos_hint={"center_y": 0.5},
-                icon_size="20dp",
-            )
-            btn.size_hint_x = 0.10
+        if self._add_actions_col:
+            # Precedence: if row_actions_builder provided, gear opens menu; else if row_action provided, gear invokes callback.
+            if self._row_actions_builder or self._row_action:
+                # Use a menu indicator icon when multiple actions (builder) exist; pencil only for direct single action
+                _icon = (
+                    "pencil"
+                    if (self._row_action and not self._row_actions_builder)
+                    else "dots-vertical"
+                )
+                btn = MDIconButton(
+                    icon=_icon,
+                    size_hint=(None, None),
+                    size=(dp(28), dp(28)),
+                    pos_hint={"center_y": 0.5},
+                    icon_size="20dp",
+                )
+                btn.size_hint_x = 0.10
 
-            def open_menu(*_):  # pragma: no cover
-                self._open_row_menu(row_data, btn)
+                if self._row_actions_builder:
 
-            btn.bind(on_release=open_menu)
-            row.add_widget(btn)
+                    def on_press(*_):  # pragma: no cover
+                        self._open_row_menu(row_data, btn)
+
+                else:
+
+                    def on_press(*_):  # pragma: no cover
+                        try:
+                            self._row_action(row_data)
+                        except Exception:
+                            pass
+
+                btn.bind(on_release=on_press)
+                row.add_widget(btn)
+
         self._table_box.add_widget(row)
         self._row_widgets.append(row)
 

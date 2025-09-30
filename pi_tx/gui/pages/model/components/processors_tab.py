@@ -43,7 +43,10 @@ class ProcessorsTab(MDBoxLayout, MDTabsBase):  # pragma: no cover - UI heavy
             on_close=self._clear_active_dialog,
             on_apply=self._on_diff_apply_placeholder,
         )
-        self._agg_dialog = AggregateEditDialog(on_close=self._clear_active_dialog)
+        self._agg_dialog = AggregateEditDialog(
+            on_close=self._clear_active_dialog,
+            on_apply=self._on_agg_apply,
+        )
         # Removal now handled inside edit dialogs; no separate remove dialog
         self._build_table()
 
@@ -63,9 +66,6 @@ class ProcessorsTab(MDBoxLayout, MDTabsBase):  # pragma: no cover - UI heavy
         def row_provider():
             return self._build_rows()
 
-        def row_actions(row):  # pragma: no cover - UI callback
-            return [ActionItem("Edit", lambda r=row: self._edit_processor(r))]
-
         self._table = DataTable(
             columns=[
                 ColumnSpec("type", "Type", 0.28, extractor=lambda r: r[0]),
@@ -77,7 +77,9 @@ class ProcessorsTab(MDBoxLayout, MDTabsBase):  # pragma: no cover - UI heavy
                 ),
             ],
             row_provider=row_provider,
-            row_actions_builder=row_actions,
+            row_actions_builder=None,
+            row_action=lambda row: self._edit_processor(row),
+            add_actions_column=True,
         )
         self.add_widget(self._table)
 
@@ -188,15 +190,21 @@ class ProcessorsTab(MDBoxLayout, MDTabsBase):  # pragma: no cover - UI heavy
             self._active_dialog = self._diff_dialog.dialog
         elif ptype == "Aggregate" and config_obj:
             self._editing_agg_entry = config_obj
+            all_channels = [
+                f"ch{c}" for c in sorted(self._current_model.channels.keys())
+            ]
             self._agg_dialog.show(
-                targets,
-                sources,
+                all_channels=all_channels,
+                config=config_obj,
                 can_delete=True,
                 on_delete=self._on_agg_delete,
             )
             self._active_dialog = self._agg_dialog.dialog
         else:
-            self._agg_dialog.show(targets, sources)
+            all_channels = [
+                f"ch{c}" for c in sorted(self._current_model.channels.keys())
+            ]
+            self._agg_dialog.show(all_channels=all_channels, config=None)
             self._active_dialog = self._agg_dialog.dialog
 
     # Removal now handled via edit dialog delete buttons
@@ -250,6 +258,42 @@ class ProcessorsTab(MDBoxLayout, MDTabsBase):  # pragma: no cover - UI heavy
                 self._model_manager.save_model(self._current_model)
             except Exception:
                 self._log.warning("Failed to save model after aggregate delete")
+        self._editing_agg_entry = None
+        self._rebuild_processor_items()
+        self.refresh_table()
+        self._clear_active_dialog()
+
+    def _on_agg_apply(self, target: str, sources: list[dict]):  # pragma: no cover
+        self._log.info("Apply aggregate edit target=%s sources=%s", target, sources)
+        if not self._current_model:
+            return
+        if not self._current_model.processors:
+            self._current_model.processors = {}
+        agg_list = self._current_model.processors.get("aggregate")
+        if not isinstance(agg_list, list):
+            agg_list = []
+            self._current_model.processors["aggregate"] = agg_list
+
+        # If editing existing entry mutate; else append
+        updated = False
+        try:
+            if (
+                hasattr(self, "_editing_agg_entry")
+                and self._editing_agg_entry in agg_list
+            ):
+                entry = self._editing_agg_entry
+                entry["target"] = target
+                entry["channels"] = sources
+                updated = True
+        except Exception:
+            pass
+        if not updated:
+            agg_list.append({"target": target, "channels": sources})
+        if self._model_manager and hasattr(self._model_manager, "save_model"):
+            try:
+                self._model_manager.save_model(self._current_model)
+            except Exception:
+                self._log.warning("Failed to save model after aggregate apply")
         self._editing_agg_entry = None
         self._rebuild_processor_items()
         self.refresh_table()
