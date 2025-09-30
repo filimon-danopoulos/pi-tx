@@ -8,6 +8,7 @@ from kivymd.uix.selectioncontrol import MDSwitch
 from kivymd.uix.menu import MDDropdownMenu
 from kivymd.uix.button import MDFlatButton as _SelectorButton
 from kivy.metrics import dp
+from kivy.uix.widget import Widget
 from kivy.clock import Clock
 
 
@@ -23,7 +24,9 @@ class DifferentialEditDialog:
     def __init__(self, on_close=None, on_apply=None):
         self.on_close = on_close
         self.on_apply = on_apply
+        self.on_delete = None  # set per-show when deletion enabled
         self.dialog: MDDialog | None = None
+        self._delete_confirm_dialog: MDDialog | None = None
         self._left_btn: _SelectorButton | None = None
         self._right_btn: _SelectorButton | None = None
         self._inverse_switch = None
@@ -35,6 +38,8 @@ class DifferentialEditDialog:
         left: str | None = None,
         right: str | None = None,
         inverse: bool = False,
+        can_delete: bool = False,
+        on_delete=None,
     ):
         if self.dialog and self.dialog.parent:
             return
@@ -43,6 +48,7 @@ class DifferentialEditDialog:
         # Fallback defaults
         left = left or all_channels[0]
         right = right or (all_channels[1] if len(all_channels) > 1 else all_channels[0])
+        self.on_delete = on_delete if can_delete else None
 
         root = MDBoxLayout(
             orientation="vertical",
@@ -147,14 +153,28 @@ class DifferentialEditDialog:
         if self._right_btn:
             self._right_btn.bind(on_release=lambda *_: open_menu(self._right_btn))
 
+        buttons = []
+        if self.on_delete:
+            btn_delete = MDFlatButton(
+                text="DELETE",
+                on_release=lambda *_: self._open_delete_confirm(),
+            )
+            try:  # pragma: no cover - style resiliency
+                btn_delete.theme_text_color = "Custom"
+                btn_delete.text_color = (1, 0.2, 0.2, 1)
+            except Exception:
+                pass
+            buttons.append(btn_delete)
+        buttons.append(MDFlatButton(text="CLOSE", on_release=lambda *_: self.close()))
+        buttons.append(
+            MDRaisedButton(text="APPLY", on_release=lambda *_: self._apply())
+        )
+
         self.dialog = MDDialog(
             title="Edit Differential",
             type="custom",
             content_cls=root,
-            buttons=[
-                MDFlatButton(text="CLOSE", on_release=lambda *_: self.close()),
-                MDRaisedButton(text="APPLY", on_release=lambda *_: self._apply()),
-            ],
+            buttons=buttons,
         )
         self.dialog.open()
 
@@ -179,9 +199,46 @@ class DifferentialEditDialog:
                 pass
         self.close()
 
+    def _open_delete_confirm(self):  # pragma: no cover
+        if self._delete_confirm_dialog and self._delete_confirm_dialog.parent:
+            return
+        self._delete_confirm_dialog = MDDialog(
+            title="Confirm Delete",
+            text="Delete this differential processor? This cannot be undone.",
+            buttons=[
+                MDFlatButton(
+                    text="CANCEL", on_release=lambda *_: self._dismiss_delete_confirm()
+                ),
+                MDRaisedButton(
+                    text="DELETE",
+                    md_bg_color=(0.9, 0.3, 0.3, 1),
+                    on_release=lambda *_: self._perform_delete(),
+                ),
+            ],
+        )
+        self._delete_confirm_dialog.open()
+
+    def _dismiss_delete_confirm(self):  # pragma: no cover
+        if self._delete_confirm_dialog:
+            try:
+                self._delete_confirm_dialog.dismiss()
+            except Exception:
+                pass
+            self._delete_confirm_dialog = None
+
+    def _perform_delete(self):  # pragma: no cover
+        try:
+            if self.on_delete:
+                self.on_delete()
+        except Exception:
+            pass
+        self._dismiss_delete_confirm()
+        self.close()
+
     def close(self):
         if self.dialog:
             self.dialog.dismiss()
             self.dialog = None
+        self._dismiss_delete_confirm()
         if self.on_close:
             self.on_close()

@@ -9,7 +9,6 @@ from ....components.data_table import DataTable, ColumnSpec, ActionItem
 from .dialogs import (
     DifferentialEditDialog,
     AggregateEditDialog,
-    ProcessorRemoveDialog,
 )
 from .....logging_config import get_logger
 
@@ -45,10 +44,7 @@ class ProcessorsTab(MDBoxLayout, MDTabsBase):  # pragma: no cover - UI heavy
             on_apply=self._on_diff_apply_placeholder,
         )
         self._agg_dialog = AggregateEditDialog(on_close=self._clear_active_dialog)
-        self._remove_dialog = ProcessorRemoveDialog(
-            on_confirm=self._on_removed_placeholder,
-            on_cancel=self._clear_active_dialog,
-        )
+        # Removal now handled inside edit dialogs; no separate remove dialog
         self._build_table()
 
     # Public API ------------------------------------------------------
@@ -68,10 +64,7 @@ class ProcessorsTab(MDBoxLayout, MDTabsBase):  # pragma: no cover - UI heavy
             return self._build_rows()
 
         def row_actions(row):  # pragma: no cover - UI callback
-            return [
-                ActionItem("Edit", lambda r=row: self._edit_processor(r)),
-                ActionItem("Remove", lambda r=row: self._remove_processor(r)),
-            ]
+            return [ActionItem("Edit", lambda r=row: self._edit_processor(r))]
 
         self._table = DataTable(
             columns=[
@@ -180,40 +173,86 @@ class ProcessorsTab(MDBoxLayout, MDTabsBase):  # pragma: no cover - UI heavy
             inverse_flag = bool(config_obj.get("inverse"))
             left = config_obj.get("left")
             right = config_obj.get("right")
-            all_channels = [f"ch{c}" for c in sorted(self._current_model.channels.keys())]
+            all_channels = [
+                f"ch{c}" for c in sorted(self._current_model.channels.keys())
+            ]
             self._editing_diff_entry = config_obj
             self._diff_dialog.show(
                 all_channels=all_channels,
                 left=left,
                 right=right,
                 inverse=inverse_flag,
+                can_delete=True,
+                on_delete=self._on_diff_delete,
             )
             self._active_dialog = self._diff_dialog.dialog
-        elif ptype == "Aggregate":
-            self._agg_dialog.show(targets, sources)
+        elif ptype == "Aggregate" and config_obj:
+            self._editing_agg_entry = config_obj
+            self._agg_dialog.show(
+                targets,
+                sources,
+                can_delete=True,
+                on_delete=self._on_agg_delete,
+            )
             self._active_dialog = self._agg_dialog.dialog
         else:
             self._agg_dialog.show(targets, sources)
             self._active_dialog = self._agg_dialog.dialog
 
-    def _remove_processor(self, row: Tuple[str, str, str]):  # pragma: no cover
-        ptype, targets, sources = row
-        self._log.info(
-            "Remove processor requested: type=%s targets=%s sources=%s",
-            ptype,
-            targets,
-            sources,
-        )
-        self._clear_active_dialog()
-        self._remove_dialog.show(ptype, targets, sources)
-        self._active_dialog = self._remove_dialog.dialog
+    # Removal now handled via edit dialog delete buttons
 
     # Dialog helpers --------------------------------------------------
     def _clear_active_dialog(self):  # pragma: no cover
         self._active_dialog = None
 
-    def _on_removed_placeholder(self):  # pragma: no cover
-        self._log.info("(Placeholder) confirmed processor removal")
+    def _on_diff_delete(self):  # pragma: no cover
+        self._log.info("Delete differential processor entry")
+        if not self._current_model:
+            return
+        diff_list = None
+        try:
+            diff_list = self._current_model.processors.get("differential")
+        except Exception:
+            diff_list = None
+        if isinstance(diff_list, list) and hasattr(self, "_editing_diff_entry"):
+            try:
+                if self._editing_diff_entry in diff_list:
+                    diff_list.remove(self._editing_diff_entry)
+            except Exception:
+                pass
+        if self._model_manager and hasattr(self._model_manager, "save_model"):
+            try:
+                self._model_manager.save_model(self._current_model)
+            except Exception:
+                self._log.warning("Failed to save model after differential delete")
+        self._editing_diff_entry = None
+        self._rebuild_processor_items()
+        self.refresh_table()
+        self._clear_active_dialog()
+
+    def _on_agg_delete(self):  # pragma: no cover
+        self._log.info("Delete aggregate processor entry")
+        if not self._current_model:
+            return
+        agg_list = None
+        try:
+            agg_list = self._current_model.processors.get("aggregate")
+        except Exception:
+            agg_list = None
+        if isinstance(agg_list, list) and hasattr(self, "_editing_agg_entry"):
+            try:
+                if self._editing_agg_entry in agg_list:
+                    agg_list.remove(self._editing_agg_entry)
+            except Exception:
+                pass
+        if self._model_manager and hasattr(self._model_manager, "save_model"):
+            try:
+                self._model_manager.save_model(self._current_model)
+            except Exception:
+                self._log.warning("Failed to save model after aggregate delete")
+        self._editing_agg_entry = None
+        self._rebuild_processor_items()
+        self.refresh_table()
         self._clear_active_dialog()
 
     def _on_diff_apply_placeholder(
@@ -234,7 +273,10 @@ class ProcessorsTab(MDBoxLayout, MDTabsBase):  # pragma: no cover - UI heavy
         # If we were editing an existing entry, mutate it; otherwise add new
         updated = False
         try:
-            if hasattr(self, "_editing_diff_entry") and self._editing_diff_entry in diff_list:
+            if (
+                hasattr(self, "_editing_diff_entry")
+                and self._editing_diff_entry in diff_list
+            ):
                 entry = self._editing_diff_entry
                 entry["left"] = left
                 entry["right"] = right

@@ -89,3 +89,16 @@ class ModelManager:
         except Exception as e:  # pragma: no cover
             self._log.warning("Failed to read last model: %s", e)
         return None
+
+    # Persistence ----------------------------------------------------
+    def save_model(self, model: Model):  # pragma: no cover - simple IO wrapper
+        """Persist a model via underlying repository and refresh cache.
+
+        Called by UI components (e.g., processors / channels tabs) after edits.
+        """
+        try:
+            self._repo.save_model(model)
+            # Update cache so subsequent edits operate on latest instance
+            self._model_cache[model.name] = model
+        except Exception as e:
+            self._log.warning("Failed to save model %s: %s", getattr(model, 'name', '?'), e)

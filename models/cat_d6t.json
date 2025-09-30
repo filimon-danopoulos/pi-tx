@@ -65,13 +65,34 @@
       "ch7": true
     },
     "endpoints": {
-      "ch1": {"min": -1.0, "max": 1.0},
-      "ch2": {"min": -1.0, "max": 1.0},
-      "ch3": {"min": -1.0, "max": 1.0},
-      "ch4": {"min": -1.0, "max": 1.0},
-      "ch5": {"min": -1.0, "max": 1.0},
-      "ch6": {"min": -1.0, "max": 1.0},
-      "ch7": {"min": -1.0, "max": 1.0}
+      "ch1": {
+        "min": -1.0,
+        "max": 1.0
+      },
+      "ch2": {
+        "min": -1.0,
+        "max": 1.0
+      },
+      "ch3": {
+        "min": -1.0,
+        "max": 1.0
+      },
+      "ch4": {
+        "min": -1.0,
+        "max": 1.0
+      },
+      "ch5": {
+        "min": -1.0,
+        "max": 1.0
+      },
+      "ch6": {
+        "min": -1.0,
+        "max": 1.0
+      },
+      "ch7": {
+        "min": -1.0,
+        "max": 1.0
+      }
     },
     "differential": [
       {
@@ -82,7 +103,7 @@
       {
         "left": "ch4",
         "right": "ch3",
-        "inverse": false
+        "inverse": true
       }
     ],
     "aggregate": [
