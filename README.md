@@ -5,10 +5,12 @@ Low‑latency joystick → channel mapper with a KivyMD UI for selecting "models
 ## Features
 
 - Model selection from JSON files in `models/`
+- **New: Python-based model definitions** (see [Python Model Guide](docs/PYTHON_MODEL_GUIDE.md))
 - Live channel bars (bipolar, unipolar, button) with color coding
 - Queue‑based input pipeline (reduced UI thread overhead)
 - Automatic persistence of last selected model (`.last_model`)
 - Pluggable stick/control mapping file (`pi_tx/input/mappings/stick_mapping.json`)
+- Advanced processors: reverse, endpoints, differential mixing, aggregation
 
 ## Quick Start
 
@@ -37,13 +39,15 @@ models/             # user model JSON files (channel layouts)
 
 ## Models
 
+### JSON Format (Traditional)
+
 A model file (e.g. `models/cat_d6t.json`) looks like:
 
 ```json
 {
 	"name": "cat_d6t",
 	"channels": {
-		"1": {"device_path": "/dev/input/event14", "control_code": 1, "control_type": "bipolar"}
+		"ch1": {"device_path": "/dev/input/event14", "control_code": "1", "control_type": "bipolar"}
 	}
 }
 ```
@@ -51,9 +55,31 @@ A model file (e.g. `models/cat_d6t.json`) looks like:
 Fields:
 - `device_path`: Linux evdev device path
 - `control_code`: numeric event code within that device
-- `control_type`: `bipolar` | `unipolar` | `button`
+- `control_type`: `bipolar` | `unipolar` | `button` | `latching-button`
 
-Add more numbered entries as needed. Omitted channels simply don't render.
+### Python Format (New)
+
+Models can now be defined entirely in Python code:
+
+```python
+from pi_tx.domain.model_builder import ModelBuilder
+from pi_tx.domain.channel import BipolarChannel
+from pi_tx.domain.processors import ReverseProcessor
+
+model = (ModelBuilder("my_model")
+    .set_rx_num(1)
+    .add_channel(BipolarChannel(1, "/dev/input/js0", "0", "Stick", "X"))
+    .add_processor(ReverseProcessor({1: True}))
+    .build())
+```
+
+**Benefits of Python models:**
+- Type safety and IDE support
+- Code reuse through inheritance
+- Programmatic configuration
+- Version control friendly
+
+See the [Python Model Guide](docs/PYTHON_MODEL_GUIDE.md) for complete documentation and [Quick Reference](docs/QUICK_REFERENCE.md) for API details.
 
 ## Stick Mapping File
 
@@ -78,10 +104,29 @@ ic = InputController(debug=True)
 
 ## Creating / Editing Models
 
+### JSON Models
+
 1. Duplicate an existing JSON file in `models/`
 2. Adjust channel mappings (ensure the `device_path` and `control_code` exist in your stick mapping file)
 3. Start the app and choose the model from the toolbar menu (refresh icon rescans)
 4. The last chosen model is stored in `.last_model`
+
+### Python Models
+
+1. Create a model class in `examples/` or your own module
+2. Use the `ModelBuilder` API to define channels and processors
+3. Build and save the model:
+
+```python
+from examples.model_definitions import D6TModel
+from pi_tx.domain.model_repo import ModelRepository
+
+model = D6TModel().build()
+repo = ModelRepository()
+repo.save_model(model)
+```
+
+See [examples/model_definitions.py](examples/model_definitions.py) for complete examples and [docs/PYTHON_MODEL_GUIDE.md](docs/PYTHON_MODEL_GUIDE.md) for detailed guide.
 
 ## Architecture Overview
 
