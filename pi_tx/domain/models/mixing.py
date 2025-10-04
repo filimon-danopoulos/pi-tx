@@ -46,18 +46,18 @@ class DifferentialMix:
             Dictionary with the mixed left and right channel values
         """
         # Get current values for both channels
-        left_val = raw_values.get(self.left_channel, 0.0)
-        right_val = raw_values.get(self.right_channel, 0.0)
+        orig_left = raw_values.get(self.left_channel, 0.0)
+        orig_right = raw_values.get(self.right_channel, 0.0)
 
-        # Apply differential mixing (assumes bipolar -1.0 to 1.0)
-        # Forward = (left + right) / 2
-        # Turn = (right - left) / 2
-        # Then remap: left = forward - turn, right = forward + turn
-        forward = (left_val + right_val) / 2.0
-        turn = (right_val - left_val) / 2.0
+        # Apply differential mixing (working formula from channel_store)
+        left_val = orig_left + orig_right
+        right_val = orig_right - orig_left
 
-        new_left = forward - turn
-        new_right = forward + turn
+        # Scale to prevent values from exceeding [-1.0, 1.0] range
+        scale = max(1.0, abs(left_val), abs(right_val))
+
+        new_left = left_val / scale
+        new_right = right_val / scale
 
         if self.inverse:
             new_left, new_right = new_right, new_left

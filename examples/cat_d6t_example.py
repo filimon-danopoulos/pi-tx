@@ -43,11 +43,11 @@ cat_d6t = Model(
         Channel(
             name="left_track",
             control=left_stick.axes.stick_y,
-            reversed=True,
         ),
         Channel(
             name="right_track",
             control=left_stick.axes.stick_x,
+            reversed=True,
         ),
         Channel(
             name="left_cylinder",
@@ -80,13 +80,13 @@ cat_d6t = Model(
     ],
     mixes=[
         DifferentialMix(
-            left_channel="right_track",
-            right_channel="left_track",
+            left_channel="left_track",
+            right_channel="right_track",
             inverse=True,
         ),
         DifferentialMix(
-            left_channel="right_cylinder",
-            right_channel="left_cylinder",
+            left_channel="left_cylinder",
+            right_channel="right_cylinder",
             inverse=False,
         ),
         AggregateMix(
