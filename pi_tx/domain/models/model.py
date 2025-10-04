@@ -34,6 +34,10 @@ class Model:
 
     def __post_init__(self):
         """Validate model configuration on creation."""
+        # Initialize value storage fields
+        self.raw_values: dict[str, float] = {}
+        self.processed_values: dict[str, float] = {}
+
         errors = self.validate()
         if errors:
             raise ValueError(
@@ -103,9 +107,42 @@ class Model:
                 return ch
         return None
 
+    def readValues(self) -> dict[str, float]:
+        self._process()
+        self._postProcess()
+        return self.processed_values.copy()
+
+    def _process(self):
+        # Start with a copy of raw values
+        values = dict(self.raw_values)
+
+        # Apply all mixes
+        for mix in self.mixes:
+            # Each mix computes its output and we update values
+            mixed = mix.compute(values)
+            values.update(mixed)
+
+        # Store the mixed values
+        self.processed_values = values
+
+    def _postProcess(self):
+        for channel in self.channels:
+            # Get the value (post-mixing or original)
+            value = self.processed_values.get(channel.name, 0.0)
+
+            # Apply channel post-processing
+            value = channel.postProcess(value)
+
+            # Update the processed value
+            self.processed_values[channel.name] = value
+
     async def listen(self, duration: Optional[float] = None):
         """
-        Listen to all configured input devices and debug log any changes.
+        Listen to all configured input devices and collect normalized values.
+
+        This method collects and normalizes raw input values, storing them in
+        self.raw_values. It does NOT apply mixes, reversing, or endpoints.
+        Call readValues() to process the collected values.
 
         Uses asyncio and evdev to monitor input events from all physical controls
         configured in the model. Virtual controls are skipped.
@@ -190,9 +227,6 @@ class Model:
                     ]
 
                     for channel, control in matching_channels:
-                        # Create unique key for this control
-                        key = channel.name
-
                         # Normalize the value
                         if hasattr(control, "normalize"):
                             # AxisControl
@@ -201,24 +235,14 @@ class Model:
                             # ButtonControl
                             normalized = float(event.value)
 
-                        # Check if value changed
-                        if last_values.get(key) != normalized:
-                            last_values[key] = normalized
-
-                            # Apply channel processing
-                            processed = normalized
-                            if channel.reversed:
-                                if control.control_type.value == "bipolar":
-                                    processed = -processed
-                                else:
-                                    processed = 1.0 - processed
-
-                            processed = channel.endpoint.clamp(processed)
+                        # Check if value changed and store in raw_values
+                        if last_values.get(channel.name) != normalized:
+                            last_values[channel.name] = normalized
+                            self.raw_values[channel.name] = normalized
 
                             log.debug(
                                 f"{channel.name} ({control.name}): "
-                                f"raw={event.value} norm={normalized:.3f} "
-                                f"processed={processed:.3f}"
+                                f"raw={event.value} norm={normalized:.3f}"
                             )
 
             # Run all device monitors concurrently

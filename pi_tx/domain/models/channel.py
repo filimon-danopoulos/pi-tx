@@ -60,3 +60,27 @@ class Channel:
         # Create default endpoint if not provided
         if self.endpoint is None:
             self.endpoint = Endpoint(min=-1.0, max=1.0)
+
+    def postProcess(self, value: float) -> float:
+        """
+        Apply post-processing to a channel value.
+
+        This applies reversing and endpoint clamping to the value.
+
+        Args:
+            value: The input value to process
+
+        Returns:
+            The processed value after reversing and endpoint clamping
+        """
+        # Apply reversing
+        if self.reversed:
+            if self.control.control_type.value == "bipolar":
+                value = -value
+            else:
+                value = 1.0 - value
+
+        # Apply endpoints
+        value = self.endpoint.clamp(value)
+
+        return value

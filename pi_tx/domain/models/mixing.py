@@ -35,6 +35,38 @@ class DifferentialMix:
                 f"left_channel and right_channel cannot be the same: {self.left_channel}"
             )
 
+    def compute(self, raw_values: dict[str, float]) -> dict[str, float]:
+        """
+        Compute the differential mix from raw values.
+
+        Args:
+            raw_values: Dictionary mapping channel names to values
+
+        Returns:
+            Dictionary with the mixed left and right channel values
+        """
+        # Get current values for both channels
+        left_val = raw_values.get(self.left_channel, 0.0)
+        right_val = raw_values.get(self.right_channel, 0.0)
+
+        # Apply differential mixing (assumes bipolar -1.0 to 1.0)
+        # Forward = (left + right) / 2
+        # Turn = (right - left) / 2
+        # Then remap: left = forward - turn, right = forward + turn
+        forward = (left_val + right_val) / 2.0
+        turn = (right_val - left_val) / 2.0
+
+        new_left = forward - turn
+        new_right = forward + turn
+
+        if self.inverse:
+            new_left, new_right = new_right, new_left
+
+        return {
+            self.left_channel: new_left,
+            self.right_channel: new_right,
+        }
+
 
 @dataclass
 class AggregateSource:
@@ -80,3 +112,27 @@ class AggregateMix:
             raise ValueError(
                 f"target_channel must be a non-empty string or None, got {self.target_channel!r}"
             )
+
+    def compute(self, raw_values: dict[str, float]) -> dict[str, float]:
+        """
+        Compute the aggregate mix from raw values.
+
+        Args:
+            raw_values: Dictionary mapping channel names to values
+
+        Returns:
+            Dictionary with the target channel and its aggregated value
+        """
+        # Calculate weighted sum of absolute values
+        aggregate_value = 0.0
+        for src in self.sources:
+            src_val = raw_values.get(src.channel_name, 0.0)
+            aggregate_value += abs(src_val) * src.weight
+
+        # Clamp to [0.0, 1.0]
+        aggregate_value = max(0.0, min(1.0, aggregate_value))
+
+        # Determine target channel
+        target = self.target_channel or self.sources[0].channel_name
+
+        return {target: aggregate_value}
