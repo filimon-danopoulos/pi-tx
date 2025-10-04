@@ -7,7 +7,10 @@ Usage: left_stick.axes.stick_y, left_stick.buttons.trigger, etc.
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Literal
+from typing import Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from typing import Any
 
 
 class EventType(Enum):
@@ -25,18 +28,34 @@ class ControlType(Enum):
     BUTTON = "button"
 
 
-@dataclass(frozen=True)
-class AxisControl:
-    """Represents an analog axis control."""
+@dataclass
+class Control:
+    """Base class for all controls with collection reference support."""
 
     event_code: int
     event_type: EventType
     name: str
     control_type: ControlType
-    min_value: int
-    max_value: int
-    fuzz: int
-    flat: int
+    collection: Optional["ControlCollection"] = None
+
+    @property
+    def device_path(self) -> Optional[str]:
+        """Get the device path via collection.stick.device_path."""
+        if self.collection is not None and hasattr(self.collection, "stick"):
+            stick = self.collection.stick
+            if stick is not None and hasattr(stick, "device_path"):
+                return stick.device_path
+        return None
+
+
+@dataclass
+class AxisControl(Control):
+    """Represents an analog axis control."""
+
+    min_value: int = 0
+    max_value: int = 16383
+    fuzz: int = 63
+    flat: int = 1023
 
     def normalize(self, raw_value: int) -> float:
         """
@@ -74,14 +93,31 @@ class AxisControl:
             return normalized
 
 
-@dataclass(frozen=True)
-class ButtonControl:
+@dataclass
+class ButtonControl(Control):
     """Represents a digital button control."""
 
-    event_code: int
-    event_type: EventType
-    name: str
-    control_type: ControlType
+    pass  # Inherits all fields from Control
+
+
+# ============================================================================
+# Collection classes that hold controls and stick references
+# ============================================================================
+
+
+class ControlCollection:
+    """Base class for axes/buttons collections."""
+
+    def __init__(self, stick=None):
+        self.stick = stick
+        # Inject collection reference into all control attributes
+        for attr_name in dir(self):
+            if not attr_name.startswith("_"):
+                attr = getattr(self, attr_name)
+                if isinstance(attr, Control):
+                    # Create a copy with collection set
+                    attr.collection = self
+                    object.__setattr__(self, attr_name, attr)
 
 
 # ============================================================================
@@ -89,8 +125,7 @@ class ButtonControl:
 # ============================================================================
 
 
-@dataclass(frozen=True)
-class LeftStickAxes:
+class LeftStickAxes(ControlCollection):
     """Axis controls for the left joystick."""
 
     stick_y = AxisControl(
@@ -160,8 +195,7 @@ class LeftStickAxes:
     )
 
 
-@dataclass(frozen=True)
-class LeftStickButtons:
+class LeftStickButtons(ControlCollection):
     """Button controls for the left joystick."""
 
     trigger = ButtonControl(
@@ -277,14 +311,16 @@ class LeftStickButtons:
     )
 
 
-@dataclass(frozen=True)
 class LeftStick:
     """Left Thrustmaster T.16000M joystick."""
 
-    device_path = "/dev/input/by-path/pci-0000:00:14.0-usb-0:3:1.0-event-joystick"
-    name = "Left Joystick"
-    axes = LeftStickAxes()
-    buttons = LeftStickButtons()
+    def __init__(self):
+        self.device_path = (
+            "/dev/input/by-path/pci-0000:00:14.0-usb-0:2:1.0-event-joystick"
+        )
+        self.name = "Left Joystick"
+        self.axes = LeftStickAxes(stick=self)
+        self.buttons = LeftStickButtons(stick=self)
 
 
 # ============================================================================
@@ -292,8 +328,7 @@ class LeftStick:
 # ============================================================================
 
 
-@dataclass(frozen=True)
-class RightStickAxes:
+class RightStickAxes(ControlCollection):
     """Axis controls for the right joystick."""
 
     stick_y = AxisControl(
@@ -363,8 +398,7 @@ class RightStickAxes:
     )
 
 
-@dataclass(frozen=True)
-class RightStickButtons:
+class RightStickButtons(ControlCollection):
     """Button controls for the right joystick."""
 
     trigger = ButtonControl(
@@ -480,14 +514,16 @@ class RightStickButtons:
     )
 
 
-@dataclass(frozen=True)
 class RightStick:
     """Right Thrustmaster T.16000M joystick."""
 
-    device_path = "/dev/input/by-path/pci-0000:00:14.0-usb-0:2:1.0-event-joystick"
-    name = "Right Joystick"
-    axes = RightStickAxes()
-    buttons = RightStickButtons()
+    def __init__(self):
+        self.device_path = (
+            "/dev/input/by-path/pci-0000:00:14.0-usb-0:3:1.0-event-joystick"
+        )
+        self.name = "Right Joystick"
+        self.axes = RightStickAxes(stick=self)
+        self.buttons = RightStickButtons(stick=self)
 
 
 # ============================================================================

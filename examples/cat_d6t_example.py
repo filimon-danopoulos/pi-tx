@@ -5,6 +5,12 @@ This demonstrates how the cat_d6t model would look when written as Python
 code instead of JSON.
 """
 
+import sys
+from pathlib import Path
+
+# Add parent directory to path so we can import pi_tx
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 from pi_tx.domain.models import (
     Model,
     Channel,
@@ -68,7 +74,7 @@ cat_d6t = Model(
             reversed=True,
         ),
     ],
-    differential_mixes=[
+    mixes=[
         DifferentialMix(
             left_channel=2,
             right_channel=1,
@@ -77,10 +83,8 @@ cat_d6t = Model(
         DifferentialMix(
             left_channel=4,
             right_channel=3,
-            inverse=True,
+            inverse=False,
         ),
-    ],
-    aggregate_mixes=[
         AggregateMix(
             sources=[
                 AggregateSource(channel_id=1, weight=0.2),
@@ -100,8 +104,13 @@ if __name__ == "__main__":
     print(f"Model ID: {cat_d6t.model_id}")
     print(f"RX Number: {cat_d6t.rx_num}")
     print(f"Channels: {len(cat_d6t.channels)}")
-    print(f"Differential mixes: {len(cat_d6t.differential_mixes)}")
-    print(f"Aggregate mixes: {len(cat_d6t.aggregate_mixes)}")
+
+    # Count mix types
+    differential_count = sum(1 for m in cat_d6t.mixes if isinstance(m, DifferentialMix))
+    aggregate_count = sum(1 for m in cat_d6t.mixes if isinstance(m, AggregateMix))
+    print(
+        f"Mixes: {len(cat_d6t.mixes)} (Differential: {differential_count}, Aggregate: {aggregate_count})"
+    )
     print()
 
     # Show validation passes

@@ -230,8 +230,7 @@ class TestModel:
         assert model.name == "test_model"
         assert model.model_id == "abc123"
         assert len(model.channels) == 1
-        assert len(model.differential_mixes) == 0
-        assert len(model.aggregate_mixes) == 0
+        assert len(model.mixes) == 0
         assert model.rx_num == 0
 
     def test_create_model_with_mixes(self):
@@ -267,34 +266,43 @@ class TestModel:
                 Channel(id=2, control=control2),
                 Channel(id=3, control=control3),
             ],
-            differential_mixes=[
+            mixes=[
                 DifferentialMix(left_channel=1, right_channel=2),
-            ],
-            aggregate_mixes=[
                 AggregateMix(
                     sources=[
                         AggregateSource(channel_id=1, weight=0.5),
                         AggregateSource(channel_id=2, weight=0.5),
                     ],
                     target_channel=3,
-                )
+                ),
             ],
             rx_num=1,
         )
-        assert len(model.differential_mixes) == 1
-        assert len(model.aggregate_mixes) == 1
+        assert len(model.mixes) == 2
+        assert isinstance(model.mixes[0], DifferentialMix)
+        assert isinstance(model.mixes[1], AggregateMix)
         assert model.rx_num == 1
 
     def test_duplicate_channel_ids_raises_error(self):
         control1 = AxisControl(
-            event_code=1, event_type=EventType.ABS, name="stick-y",
+            event_code=1,
+            event_type=EventType.ABS,
+            name="stick-y",
             control_type=ControlType.BIPOLAR,
-            min_value=0, max_value=255, fuzz=0, flat=15,
+            min_value=0,
+            max_value=255,
+            fuzz=0,
+            flat=15,
         )
         control2 = AxisControl(
-            event_code=0, event_type=EventType.ABS, name="stick-x",
+            event_code=0,
+            event_type=EventType.ABS,
+            name="stick-x",
             control_type=ControlType.BIPOLAR,
-            min_value=0, max_value=255, fuzz=0, flat=15,
+            min_value=0,
+            max_value=255,
+            fuzz=0,
+            flat=15,
         )
         with pytest.raises(ValueError, match="Duplicate channel IDs"):
             Model(
@@ -308,9 +316,14 @@ class TestModel:
 
     def test_invalid_differential_mix_reference(self):
         control = AxisControl(
-            event_code=1, event_type=EventType.ABS, name="stick-y",
+            event_code=1,
+            event_type=EventType.ABS,
+            name="stick-y",
             control_type=ControlType.BIPOLAR,
-            min_value=0, max_value=255, fuzz=0, flat=15,
+            min_value=0,
+            max_value=255,
+            fuzz=0,
+            flat=15,
         )
         with pytest.raises(ValueError, match="references invalid channel"):
             Model(
@@ -319,16 +332,21 @@ class TestModel:
                 channels=[
                     Channel(id=1, control=control),
                 ],
-                differential_mixes=[
+                mixes=[
                     DifferentialMix(left_channel=1, right_channel=99),
                 ],
             )
 
     def test_invalid_aggregate_source_reference(self):
         control = AxisControl(
-            event_code=1, event_type=EventType.ABS, name="stick-y",
+            event_code=1,
+            event_type=EventType.ABS,
+            name="stick-y",
             control_type=ControlType.BIPOLAR,
-            min_value=0, max_value=255, fuzz=0, flat=15,
+            min_value=0,
+            max_value=255,
+            fuzz=0,
+            flat=15,
         )
         with pytest.raises(ValueError, match="references invalid channel"):
             Model(
@@ -337,18 +355,23 @@ class TestModel:
                 channels=[
                     Channel(id=1, control=control),
                 ],
-                aggregate_mixes=[
+                mixes=[
                     AggregateMix(
                         sources=[AggregateSource(channel_id=99)],
-                    )
+                    ),
                 ],
             )
 
     def test_invalid_aggregate_target_reference(self):
         control = AxisControl(
-            event_code=1, event_type=EventType.ABS, name="stick-y",
+            event_code=1,
+            event_type=EventType.ABS,
+            name="stick-y",
             control_type=ControlType.BIPOLAR,
-            min_value=0, max_value=255, fuzz=0, flat=15,
+            min_value=0,
+            max_value=255,
+            fuzz=0,
+            flat=15,
         )
         with pytest.raises(ValueError, match="target channel.*is invalid"):
             Model(
@@ -357,19 +380,24 @@ class TestModel:
                 channels=[
                     Channel(id=1, control=control),
                 ],
-                aggregate_mixes=[
+                mixes=[
                     AggregateMix(
                         sources=[AggregateSource(channel_id=1)],
                         target_channel=99,
-                    )
+                    ),
                 ],
             )
 
     def test_invalid_rx_num(self):
         control = AxisControl(
-            event_code=1, event_type=EventType.ABS, name="stick-y",
+            event_code=1,
+            event_type=EventType.ABS,
+            name="stick-y",
             control_type=ControlType.BIPOLAR,
-            min_value=0, max_value=255, fuzz=0, flat=15,
+            min_value=0,
+            max_value=255,
+            fuzz=0,
+            flat=15,
         )
         with pytest.raises(ValueError, match="rx_num must be in range"):
             Model(
@@ -383,14 +411,24 @@ class TestModel:
 
     def test_get_channel_by_id(self):
         control1 = AxisControl(
-            event_code=1, event_type=EventType.ABS, name="elevator",
+            event_code=1,
+            event_type=EventType.ABS,
+            name="elevator",
             control_type=ControlType.BIPOLAR,
-            min_value=0, max_value=255, fuzz=0, flat=15,
+            min_value=0,
+            max_value=255,
+            fuzz=0,
+            flat=15,
         )
         control2 = AxisControl(
-            event_code=0, event_type=EventType.ABS, name="aileron",
+            event_code=0,
+            event_type=EventType.ABS,
+            name="aileron",
             control_type=ControlType.BIPOLAR,
-            min_value=0, max_value=255, fuzz=0, flat=15,
+            min_value=0,
+            max_value=255,
+            fuzz=0,
+            flat=15,
         )
         model = Model(
             name="test_model",
@@ -410,14 +448,24 @@ class TestModel:
 
     def test_get_channel_by_name(self):
         control1 = AxisControl(
-            event_code=1, event_type=EventType.ABS, name="elevator",
+            event_code=1,
+            event_type=EventType.ABS,
+            name="elevator",
             control_type=ControlType.BIPOLAR,
-            min_value=0, max_value=255, fuzz=0, flat=15,
+            min_value=0,
+            max_value=255,
+            fuzz=0,
+            flat=15,
         )
         control2 = AxisControl(
-            event_code=0, event_type=EventType.ABS, name="aileron",
+            event_code=0,
+            event_type=EventType.ABS,
+            name="aileron",
             control_type=ControlType.BIPOLAR,
-            min_value=0, max_value=255, fuzz=0, flat=15,
+            min_value=0,
+            max_value=255,
+            fuzz=0,
+            flat=15,
         )
         model = Model(
             name="test_model",
