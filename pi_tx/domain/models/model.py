@@ -50,40 +50,37 @@ class Model:
         """
         errors = []
 
-        # Check for duplicate channel IDs
-        channel_ids = [ch.id for ch in self.channels]
-        if len(channel_ids) != len(set(channel_ids)):
-            duplicates = [cid for cid in channel_ids if channel_ids.count(cid) > 1]
-            errors.append(f"Duplicate channel IDs found: {set(duplicates)}")
-
-        # Check channel IDs are positive (already checked in Channel.__post_init__)
-        # but we check here for completeness
-        if any(ch.id <= 0 for ch in self.channels):
-            errors.append("All channel IDs must be positive")
+        # Check for duplicate channel names
+        channel_names = [ch.name for ch in self.channels]
+        if len(channel_names) != len(set(channel_names)):
+            duplicates = [
+                name for name in channel_names if channel_names.count(name) > 1
+            ]
+            errors.append(f"Duplicate channel names found: {set(duplicates)}")
 
         # Validate mix references
-        valid_ids = set(channel_ids)
+        valid_names = set(channel_names)
 
         for i, mix in enumerate(self.mixes):
             if isinstance(mix, DifferentialMix):
-                if mix.left_channel not in valid_ids:
+                if mix.left_channel not in valid_names:
                     errors.append(
-                        f"Differential mix {i}: references invalid channel {mix.left_channel}"
+                        f"Differential mix {i}: references invalid channel '{mix.left_channel}'"
                     )
-                if mix.right_channel not in valid_ids:
+                if mix.right_channel not in valid_names:
                     errors.append(
-                        f"Differential mix {i}: references invalid channel {mix.right_channel}"
+                        f"Differential mix {i}: references invalid channel '{mix.right_channel}'"
                     )
             elif isinstance(mix, AggregateMix):
                 for j, src in enumerate(mix.sources):
-                    if src.channel_id not in valid_ids:
+                    if src.channel_name not in valid_names:
                         errors.append(
                             f"Aggregate mix {i}, source {j}: "
-                            f"references invalid channel {src.channel_id}"
+                            f"references invalid channel '{src.channel_name}'"
                         )
-                if mix.target_channel and mix.target_channel not in valid_ids:
+                if mix.target_channel and mix.target_channel not in valid_names:
                     errors.append(
-                        f"Aggregate mix {i}: target channel {mix.target_channel} is invalid"
+                        f"Aggregate mix {i}: target channel '{mix.target_channel}' is invalid"
                     )
 
         # Validate rx_num range
@@ -92,15 +89,15 @@ class Model:
 
         return errors
 
-    def get_channel_by_id(self, channel_id: int) -> Optional[Channel]:
-        """Get a channel by its ID."""
+    def get_channel_by_name(self, channel_name: str) -> Optional[Channel]:
+        """Get a channel by its name."""
         for ch in self.channels:
-            if ch.id == channel_id:
+            if ch.name == channel_name:
                 return ch
         return None
 
-    def get_channel_by_name(self, control_name: str) -> Optional[Channel]:
-        """Get a channel by its control name."""
+    def get_channel_by_control_name(self, control_name: str) -> Optional[Channel]:
+        """Get a channel by its control's name."""
         for ch in self.channels:
             if ch.control.name == control_name:
                 return ch
@@ -160,6 +157,9 @@ class Model:
 
         # Track last values to detect changes
         last_values = {}
+        # Rate limiting: 100Hz = 10ms minimum interval between processing
+        min_interval = 0.01  # 10ms = 100Hz
+        last_process_time = {}  # Track last process time per (device, code, type)
 
         try:
             # Create async tasks for each device
@@ -168,6 +168,17 @@ class Model:
                     # Skip sync and misc events
                     if event.type in (ecodes.EV_SYN, ecodes.EV_MSC):
                         continue
+
+                    # Rate limiting check
+                    event_key = (device.path, event.code, event.type)
+                    current_time = asyncio.get_event_loop().time()
+                    last_time = last_process_time.get(event_key, 0)
+
+                    if current_time - last_time < min_interval:
+                        # Skip processing if below 100Hz threshold
+                        continue
+
+                    last_process_time[event_key] = current_time
 
                     # Find matching channels for this event
                     matching_channels = [
@@ -180,7 +191,7 @@ class Model:
 
                     for channel, control in matching_channels:
                         # Create unique key for this control
-                        key = (device.path, event.code, event.type)
+                        key = channel.name
 
                         # Normalize the value
                         if hasattr(control, "normalize"):
@@ -205,7 +216,7 @@ class Model:
                             processed = channel.endpoint.clamp(processed)
 
                             log.debug(
-                                f"Ch{channel.id} ({control.name}): "
+                                f"{channel.name} ({control.name}): "
                                 f"raw={event.value} norm={normalized:.3f} "
                                 f"processed={processed:.3f}"
                             )

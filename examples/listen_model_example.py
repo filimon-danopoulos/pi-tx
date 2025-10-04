@@ -37,28 +37,28 @@ test_model = Model(
     rx_num=1,
     channels=[
         Channel(
-            id=1,
+            name="left_y",
             control=left_stick.axes.stick_y,
             reversed=True,
         ),
         Channel(
-            id=2,
+            name="left_x",
             control=left_stick.axes.stick_x,
         ),
         Channel(
-            id=3,
+            name="throttle",
             control=left_stick.axes.throttle,
         ),
         Channel(
-            id=4,
+            name="trigger",
             control=left_stick.buttons.trigger,
         ),
         Channel(
-            id=5,
+            name="right_y",
             control=right_stick.axes.stick_y,
         ),
         Channel(
-            id=6,
+            name="right_x",
             control=right_stick.axes.stick_x,
         ),
     ],
@@ -71,7 +71,7 @@ async def main():
     print()
     print("Channels configured:")
     for ch in test_model.channels:
-        print(f"  Ch{ch.id}: {ch.control.name}")
+        print(f"  {ch.name}: {ch.control.name}")
         if ch.reversed:
             print(f"        Reversed: Yes")
     print()

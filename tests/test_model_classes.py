@@ -68,10 +68,10 @@ class TestChannel:
             flat=15,
         )
         ch = Channel(
-            id=1,
+            name="elevator",
             control=control,
         )
-        assert ch.id == 1
+        assert ch.name == "elevator"
         assert ch.control.name == "stick-y"
         assert ch.control.control_type == ControlType.BIPOLAR
         assert ch.reversed is False
@@ -90,7 +90,7 @@ class TestChannel:
             flat=15,
         )
         ch = Channel(
-            id=2,
+            name="throttle_channel",
             control=control,
             reversed=True,
             endpoint=Endpoint(min=0.0, max=1.0),
@@ -110,9 +110,9 @@ class TestChannel:
             fuzz=0,
             flat=15,
         )
-        with pytest.raises(ValueError, match="Channel ID must be positive"):
+        with pytest.raises(ValueError, match="Channel name must be a non-empty string"):
             Channel(
-                id=0,
+                name="",
                 control=control,
             )
 
@@ -139,43 +139,43 @@ class TestDifferentialMix:
     """Tests for DifferentialMix dataclass."""
 
     def test_create_differential_mix(self):
-        mix = DifferentialMix(left_channel=1, right_channel=2)
-        assert mix.left_channel == 1
-        assert mix.right_channel == 2
+        mix = DifferentialMix(left_channel="left", right_channel="right")
+        assert mix.left_channel == "left"
+        assert mix.right_channel == "right"
         assert mix.inverse is False
 
     def test_create_differential_mix_with_inverse(self):
-        mix = DifferentialMix(left_channel=1, right_channel=2, inverse=True)
+        mix = DifferentialMix(left_channel="left", right_channel="right", inverse=True)
         assert mix.inverse is True
 
     def test_same_channel_raises_error(self):
         with pytest.raises(ValueError, match="cannot be the same"):
-            DifferentialMix(left_channel=1, right_channel=1)
+            DifferentialMix(left_channel="same", right_channel="same")
 
     def test_invalid_left_channel(self):
-        with pytest.raises(ValueError, match="left_channel must be positive"):
-            DifferentialMix(left_channel=0, right_channel=2)
+        with pytest.raises(ValueError, match="left_channel must be a non-empty string"):
+            DifferentialMix(left_channel="", right_channel="right")
 
 
 class TestAggregateSource:
     """Tests for AggregateSource dataclass."""
 
     def test_create_aggregate_source(self):
-        src = AggregateSource(channel_id=1)
-        assert src.channel_id == 1
+        src = AggregateSource(channel_name="ch1")
+        assert src.channel_name == "ch1"
         assert src.weight == 1.0
 
     def test_create_aggregate_source_with_weight(self):
-        src = AggregateSource(channel_id=2, weight=0.5)
+        src = AggregateSource(channel_name="ch2", weight=0.5)
         assert src.weight == 0.5
 
     def test_invalid_weight_too_high(self):
         with pytest.raises(ValueError, match="weight must be in range"):
-            AggregateSource(channel_id=1, weight=1.5)
+            AggregateSource(channel_name="ch1", weight=1.5)
 
     def test_invalid_weight_negative(self):
         with pytest.raises(ValueError, match="weight must be in range"):
-            AggregateSource(channel_id=1, weight=-0.1)
+            AggregateSource(channel_name="ch1", weight=-0.1)
 
 
 class TestAggregateMix:
@@ -184,8 +184,8 @@ class TestAggregateMix:
     def test_create_aggregate_mix(self):
         mix = AggregateMix(
             sources=[
-                AggregateSource(channel_id=1, weight=0.5),
-                AggregateSource(channel_id=2, weight=0.5),
+                AggregateSource(channel_name="ch1", weight=0.5),
+                AggregateSource(channel_name="ch2", weight=0.5),
             ]
         )
         assert len(mix.sources) == 2
@@ -193,10 +193,10 @@ class TestAggregateMix:
 
     def test_create_aggregate_mix_with_target(self):
         mix = AggregateMix(
-            sources=[AggregateSource(channel_id=1)],
-            target_channel=3,
+            sources=[AggregateSource(channel_name="ch1")],
+            target_channel="ch3",
         )
-        assert mix.target_channel == 3
+        assert mix.target_channel == "ch3"
 
     def test_empty_sources_raises_error(self):
         with pytest.raises(ValueError, match="must have at least one source"):
@@ -222,7 +222,7 @@ class TestModel:
             model_id="abc123",
             channels=[
                 Channel(
-                    id=1,
+                    name="ch1",
                     control=control,
                 )
             ],
@@ -262,18 +262,18 @@ class TestModel:
             name="test_model",
             model_id="abc123",
             channels=[
-                Channel(id=1, control=control1),
-                Channel(id=2, control=control2),
-                Channel(id=3, control=control3),
+                Channel(name="ch1", control=control1),
+                Channel(name="ch2", control=control2),
+                Channel(name="ch3", control=control3),
             ],
             mixes=[
-                DifferentialMix(left_channel=1, right_channel=2),
+                DifferentialMix(left_channel="ch1", right_channel="ch2"),
                 AggregateMix(
                     sources=[
-                        AggregateSource(channel_id=1, weight=0.5),
-                        AggregateSource(channel_id=2, weight=0.5),
+                        AggregateSource(channel_name="ch1", weight=0.5),
+                        AggregateSource(channel_name="ch2", weight=0.5),
                     ],
-                    target_channel=3,
+                    target_channel="ch3",
                 ),
             ],
             rx_num=1,
@@ -304,13 +304,13 @@ class TestModel:
             fuzz=0,
             flat=15,
         )
-        with pytest.raises(ValueError, match="Duplicate channel IDs"):
+        with pytest.raises(ValueError, match="Duplicate channel names"):
             Model(
                 name="test_model",
                 model_id="abc123",
                 channels=[
-                    Channel(id=1, control=control1),
-                    Channel(id=1, control=control2),
+                    Channel(name="duplicate", control=control1),
+                    Channel(name="duplicate", control=control2),
                 ],
             )
 
@@ -330,10 +330,10 @@ class TestModel:
                 name="test_model",
                 model_id="abc123",
                 channels=[
-                    Channel(id=1, control=control),
+                    Channel(name="ch1", control=control),
                 ],
                 mixes=[
-                    DifferentialMix(left_channel=1, right_channel=99),
+                    DifferentialMix(left_channel="ch1", right_channel="ch99"),
                 ],
             )
 
@@ -353,11 +353,11 @@ class TestModel:
                 name="test_model",
                 model_id="abc123",
                 channels=[
-                    Channel(id=1, control=control),
+                    Channel(name="ch1", control=control),
                 ],
                 mixes=[
                     AggregateMix(
-                        sources=[AggregateSource(channel_id=99)],
+                        sources=[AggregateSource(channel_name="ch99")],
                     ),
                 ],
             )
@@ -378,12 +378,12 @@ class TestModel:
                 name="test_model",
                 model_id="abc123",
                 channels=[
-                    Channel(id=1, control=control),
+                    Channel(name="ch1", control=control),
                 ],
                 mixes=[
                     AggregateMix(
-                        sources=[AggregateSource(channel_id=1)],
-                        target_channel=99,
+                        sources=[AggregateSource(channel_name="ch1")],
+                        target_channel="ch99",
                     ),
                 ],
             )
@@ -404,7 +404,7 @@ class TestModel:
                 name="test_model",
                 model_id="abc123",
                 channels=[
-                    Channel(id=1, control=control),
+                    Channel(name="ch1", control=control),
                 ],
                 rx_num=99,
             )
@@ -434,16 +434,16 @@ class TestModel:
             name="test_model",
             model_id="abc123",
             channels=[
-                Channel(id=1, control=control1),
-                Channel(id=2, control=control2),
+                Channel(name="ch1", control=control1),
+                Channel(name="ch2", control=control2),
             ],
         )
-        ch = model.get_channel_by_id(2)
+        ch = model.get_channel_by_name("ch2")
         assert ch is not None
-        assert ch.id == 2
+        assert ch.name == "ch2"
         assert ch.control.name == "aileron"
 
-        ch_not_found = model.get_channel_by_id(99)
+        ch_not_found = model.get_channel_by_name("ch99")
         assert ch_not_found is None
 
     def test_get_channel_by_name(self):
@@ -471,13 +471,13 @@ class TestModel:
             name="test_model",
             model_id="abc123",
             channels=[
-                Channel(id=1, control=control1),
-                Channel(id=2, control=control2),
+                Channel(name="ch1", control=control1),
+                Channel(name="ch2", control=control2),
             ],
         )
-        ch = model.get_channel_by_name("aileron")
+        ch = model.get_channel_by_control_name("aileron")
         assert ch is not None
-        assert ch.id == 2
+        assert ch.name == "ch2"
 
-        ch_not_found = model.get_channel_by_name("nonexistent")
+        ch_not_found = model.get_channel_by_control_name("nonexistent")
         assert ch_not_found is None

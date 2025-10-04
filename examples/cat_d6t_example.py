@@ -41,58 +41,62 @@ cat_d6t = Model(
     rx_num=1,
     channels=[
         Channel(
-            id=1,
+            name="left_track",
             control=left_stick.axes.stick_y,
             reversed=True,
         ),
         Channel(
-            id=2,
+            name="right_track",
             control=left_stick.axes.stick_x,
         ),
         Channel(
-            id=3,
+            name="left_cylinder",
             control=right_stick.axes.stick_y,
             reversed=True,
         ),
         Channel(
-            id=4,
+            name="right_cylinder",
             control=right_stick.axes.stick_x,
         ),
         Channel(
-            id=5,
+            name="ripper",
             control=left_stick.axes.hat_y,
             reversed=True,
         ),
         Channel(
-            id=6,
+            name="lights_cylinders",
             control=left_stick.buttons.sb_2,
             latching=True,
         ),
         Channel(
-            id=7,
+            name="lights_roof",
+            control=left_stick.buttons.sb_2,
+            latching=True,
+        ),
+        Channel(
+            name="sound",
             control=virtual_sound_mix,
-            reversed=True,
         ),
     ],
     mixes=[
         DifferentialMix(
-            left_channel=2,
-            right_channel=1,
+            left_channel="right_track",
+            right_channel="left_track",
             inverse=True,
         ),
         DifferentialMix(
-            left_channel=4,
-            right_channel=3,
+            left_channel="right_cylinder",
+            right_channel="left_cylinder",
             inverse=False,
         ),
         AggregateMix(
             sources=[
-                AggregateSource(channel_id=1, weight=0.2),
-                AggregateSource(channel_id=2, weight=0.2),
-                AggregateSource(channel_id=3, weight=0.4),
-                AggregateSource(channel_id=4, weight=0.4),
+                AggregateSource(channel_name="left_track", weight=0.4),
+                AggregateSource(channel_name="right_track", weight=0.4),
+                AggregateSource(channel_name="left_cylinder", weight=0.2),
+                AggregateSource(channel_name="right_cylinder", weight=0.2),
             ],
-            target_channel=7,
+            target_channel="sound",
         ),
     ],
 )
@@ -125,6 +129,6 @@ if __name__ == "__main__":
     print()
     print("Channels:")
     for ch in cat_d6t.channels:
-        print(f"  Ch{ch.id}: {ch.control.name} ({ch.control.control_type.value})")
+        print(f"  {ch.name}: {ch.control.name} ({ch.control.control_type.value})")
         if ch.reversed:
             print(f"       Reversed: Yes")

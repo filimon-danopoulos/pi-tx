@@ -42,7 +42,7 @@ class Channel:
     output channel with associated processing parameters.
     """
 
-    id: int  # Channel number (1-based)
+    name: str  # Channel name (e.g., "throttle", "steering", "ch1")
     control: Union[AxisControl, ButtonControl, VirtualControl]
 
     # Processing parameters (per-channel)
@@ -52,8 +52,10 @@ class Channel:
 
     def __post_init__(self):
         """Validate channel configuration on creation."""
-        if self.id <= 0:
-            raise ValueError(f"Channel ID must be positive, got {self.id}")
+        if not self.name or not isinstance(self.name, str):
+            raise ValueError(
+                f"Channel name must be a non-empty string, got {self.name!r}"
+            )
 
         # Create default endpoint if not provided
         if self.endpoint is None:
