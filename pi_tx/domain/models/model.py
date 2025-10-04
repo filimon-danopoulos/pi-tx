@@ -235,14 +235,17 @@ class Model:
                             # ButtonControl
                             normalized = float(event.value)
 
+                        # Apply pre-processing (latching)
+                        preprocessed = channel.preProcess(normalized)
+
                         # Check if value changed and store in raw_values
-                        if last_values.get(channel.name) != normalized:
-                            last_values[channel.name] = normalized
-                            self.raw_values[channel.name] = normalized
+                        if last_values.get(channel.name) != preprocessed:
+                            last_values[channel.name] = preprocessed
+                            self.raw_values[channel.name] = preprocessed
 
                             log.debug(
                                 f"{channel.name} ({control.name}): "
-                                f"raw={event.value} norm={normalized:.3f}"
+                                f"raw={event.value} norm={normalized:.3f} pre={preprocessed:.3f}"
                             )
 
             # Run all device monitors concurrently

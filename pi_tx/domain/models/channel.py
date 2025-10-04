@@ -61,18 +61,27 @@ class Channel:
         if self.endpoint is None:
             self.endpoint = Endpoint(min=-1.0, max=1.0)
 
+        # Initialize latching state
+        self._latch_state: float = 0.0
+        self._last_input: float = 0.0
+
+    def preProcess(self, value: float) -> float:
+        # Apply latching if enabled
+        if self.latching:
+            # Detect rising edge: transition from zero to non-zero
+            if self._last_input == 0.0 and value != 0.0:
+                # Toggle the latch state
+                self._latch_state = 1.0 if self._latch_state == 0.0 else 0.0
+
+            # Update last input for next comparison
+            self._last_input = value
+
+            # Use the latched state as the value
+            value = self._latch_state
+
+        return value
+
     def postProcess(self, value: float) -> float:
-        """
-        Apply post-processing to a channel value.
-
-        This applies reversing and endpoint clamping to the value.
-
-        Args:
-            value: The input value to process
-
-        Returns:
-            The processed value after reversing and endpoint clamping
-        """
         # Apply reversing
         if self.reversed:
             if self.control.control_type.value == "bipolar":
