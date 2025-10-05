@@ -91,10 +91,10 @@ cat_d6t = Model(
         ),
         AggregateMix(
             sources=[
-                AggregateSource(channel_name="left_track", weight=0.4),
-                AggregateSource(channel_name="right_track", weight=0.4),
-                AggregateSource(channel_name="left_cylinder", weight=0.2),
-                AggregateSource(channel_name="right_cylinder", weight=0.2),
+                AggregateSource(channel_name="left_track", weight=0.3),
+                AggregateSource(channel_name="right_track", weight=0.3),
+                AggregateSource(channel_name="left_cylinder", weight=0.4),
+                AggregateSource(channel_name="right_cylinder", weight=0.4),
             ],
             target_channel="sound",
         ),
