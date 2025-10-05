@@ -1,5 +1,5 @@
 """
-Integration tests for Channel latching within Model processing.
+Integration tests for Value latching within Model processing.
 
 Tests latching behavior through the full Model processing pipeline.
 Since latching happens in preProcess (at the input stage), these tests
@@ -8,8 +8,9 @@ simulate the flow by calling preProcess on channels before readValues.
 
 import pytest
 from pi_tx.domain import (
+    Channels,
     Model,
-    Channel,
+    Value,
     Endpoint,
     VirtualControl,
 )
@@ -17,7 +18,7 @@ from pi_tx.domain.stick_mapping import ControlType
 
 
 class TestLatchingInModelProcessing:
-    """Test latching channels within full model processing."""
+    """Test latching values within full model processing."""
 
     def test_latching_channel_in_model(self):
         """Latching should work through full Model.readValues() pipeline."""
@@ -25,13 +26,14 @@ class TestLatchingInModelProcessing:
         model = Model(
             name="test",
             model_id="test123",
-            channels=[
-                Channel(name="gear", control=button_ctrl, latching=True),
+            values=[
+                Value(name="gear", control=button_ctrl, latching=True),
             ],
+            channels=Channels(),
         )
 
         # Simulate input flow: preProcess happens during listen(), then readValues()
-        gear_channel = model.get_channel_by_name("gear")
+        gear_channel = model.get_value_by_name("gear")
 
         # Initial state
         model.raw_values = {"gear": gear_channel.preProcess(0.0)}
@@ -57,14 +59,15 @@ class TestLatchingInModelProcessing:
         model = Model(
             name="test",
             model_id="test123",
-            channels=[
-                Channel(name="ch1", control=btn1, latching=True),
-                Channel(name="ch2", control=btn2, latching=True),
+            values=[
+                Value(name="ch1", control=btn1, latching=True),
+                Value(name="ch2", control=btn2, latching=True),
             ],
+            channels=Channels(),
         )
 
-        ch1 = model.get_channel_by_name("ch1")
-        ch2 = model.get_channel_by_name("ch2")
+        ch1 = model.get_value_by_name("ch1")
+        ch2 = model.get_value_by_name("ch2")
 
         # Toggle ch1 on
         model.raw_values = {"ch1": ch1.preProcess(0.0), "ch2": ch2.preProcess(0.0)}
@@ -98,12 +101,13 @@ class TestLatchingInModelProcessing:
         model = Model(
             name="test",
             model_id="test123",
-            channels=[
-                Channel(name="ch1", control=btn, latching=True, reversed=True),
+            values=[
+                Value(name="ch1", control=btn, latching=True, reversed=True),
             ],
+            channels=Channels(),
         )
 
-        ch1 = model.get_channel_by_name("ch1")
+        ch1 = model.get_value_by_name("ch1")
 
         # Initial: preProcess 0.0 -> 0.0, postProcess reversed -> 1.0
         model.raw_values = {"ch1": ch1.preProcess(0.0)}
@@ -127,17 +131,18 @@ class TestLatchingInModelProcessing:
         model = Model(
             name="test",
             model_id="test123",
-            channels=[
-                Channel(
+            values=[
+                Value(
                     name="ch1",
                     control=btn,
                     latching=True,
                     endpoint=Endpoint(min=0.3, max=0.7),
                 ),
             ],
+            channels=Channels(),
         )
 
-        ch1 = model.get_channel_by_name("ch1")
+        ch1 = model.get_value_by_name("ch1")
 
         # preProcess 0.0 -> 0.0, postProcess clamped to 0.3
         model.raw_values = {"ch1": ch1.preProcess(0.0)}
@@ -155,27 +160,37 @@ class TestLatchingInModelProcessing:
         model = Model(
             name="test",
             model_id="test123",
-            channels=[
-                Channel(name="switch", control=btn, latching=True),
-                Channel(name="throttle", control=axis, latching=False),
+            values=[
+                Value(name="switch", control=btn, latching=True),
+                Value(name="throttle", control=axis, latching=False),
             ],
+            channels=Channels(),
         )
 
-        switch_ch = model.get_channel_by_name("switch")
-        throttle_ch = model.get_channel_by_name("throttle")
+        switch_ch = model.get_value_by_name("switch")
+        throttle_ch = model.get_value_by_name("throttle")
 
         # Switch toggles, throttle passes through
-        model.raw_values = {"switch": switch_ch.preProcess(0.0), "throttle": throttle_ch.preProcess(0.5)}
+        model.raw_values = {
+            "switch": switch_ch.preProcess(0.0),
+            "throttle": throttle_ch.preProcess(0.5),
+        }
         result = model.readValues()
         assert result["switch"] == 0.0
         assert result["throttle"] == 0.5
 
-        model.raw_values = {"switch": switch_ch.preProcess(1.0), "throttle": throttle_ch.preProcess(0.7)}
+        model.raw_values = {
+            "switch": switch_ch.preProcess(1.0),
+            "throttle": throttle_ch.preProcess(0.7),
+        }
         result = model.readValues()
         assert result["switch"] == 1.0
         assert result["throttle"] == 0.7
 
-        model.raw_values = {"switch": switch_ch.preProcess(0.0), "throttle": throttle_ch.preProcess(0.3)}
+        model.raw_values = {
+            "switch": switch_ch.preProcess(0.0),
+            "throttle": throttle_ch.preProcess(0.3),
+        }
         result = model.readValues()
         assert result["switch"] == 1.0  # Stays latched
         assert result["throttle"] == 0.3  # Follows input
@@ -186,12 +201,13 @@ class TestLatchingInModelProcessing:
         model = Model(
             name="test",
             model_id="test123",
-            channels=[
-                Channel(name="ch1", control=btn, latching=True),
+            values=[
+                Value(name="ch1", control=btn, latching=True),
             ],
+            channels=Channels(),
         )
 
-        ch1 = model.get_channel_by_name("ch1")
+        ch1 = model.get_value_by_name("ch1")
 
         # Toggle on
         model.raw_values = {"ch1": ch1.preProcess(0.0)}
@@ -226,16 +242,16 @@ class TestLatchingInModelProcessing:
         model = Model(
             name="test",
             model_id="test123",
-            channels=[
-                Channel(
+            values=[
+                Value(
                     name="switch",
                     control=btn,
                     latching=True,
                     reversed=True,
                     endpoint=Endpoint(min=0.2, max=0.8),
                 ),
-                Channel(name="throttle", control=axis),
-                Channel(name="combined", control=output),
+                Value(name="throttle", control=axis),
+                Value(name="combined", control=output),
             ],
             mixes=[
                 AggregateMix(
@@ -246,15 +262,16 @@ class TestLatchingInModelProcessing:
                     target_channel="combined",
                 ),
             ],
+            channels=Channels(),
         )
 
-        switch_ch = model.get_channel_by_name("switch")
-        throttle_ch = model.get_channel_by_name("throttle")
+        switch_ch = model.get_value_by_name("switch")
+        throttle_ch = model.get_value_by_name("throttle")
 
         # Important: AggregateMix uses raw_values (before postProcess)
         # So mixing happens before reversing/endpoints are applied
-        
-        # Initial state: 
+
+        # Initial state:
         # - preProcess: switch=0.0 (latched), throttle=0.5
         # - raw_values used for mixing: switch=0.0, throttle=0.5
         # - AggregateMix: |0.0|*0.5 + |0.5|*0.5 = 0.25
@@ -262,7 +279,7 @@ class TestLatchingInModelProcessing:
         model.raw_values = {
             "switch": switch_ch.preProcess(0.0),
             "throttle": throttle_ch.preProcess(0.5),
-            "combined": 0.0
+            "combined": 0.0,
         }
         result = model.readValues()
         assert result["switch"] == 0.8  # 0.0 -> reversed 1.0 -> clamped 0.8
@@ -276,7 +293,7 @@ class TestLatchingInModelProcessing:
         model.raw_values = {
             "switch": switch_ch.preProcess(1.0),
             "throttle": throttle_ch.preProcess(0.5),
-            "combined": 0.0
+            "combined": 0.0,
         }
         result = model.readValues()
         assert result["switch"] == 0.2  # 1.0 -> reversed 0.0 -> clamped 0.2

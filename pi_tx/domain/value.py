@@ -1,5 +1,5 @@
 """
-Channel-related classes for RC model configuration.
+Value-related classes for RC model configuration.
 """
 
 from dataclasses import dataclass, field
@@ -12,9 +12,9 @@ from pi_tx.domain.virtual_control import VirtualControl
 @dataclass
 class Endpoint:
     """
-    Represents the output range limits for a channel.
+    Represents the output range limits for a value.
 
-    Endpoints define the minimum and maximum output values for a channel,
+    Endpoints define the minimum and maximum output values for a value,
     allowing fine-tuning of servo travel limits.
     """
 
@@ -34,27 +34,27 @@ class Endpoint:
 
 
 @dataclass
-class Channel:
+class Value:
     """
-    Represents a single RC channel configuration.
+    Represents a single RC value configuration.
 
-    A channel maps an input control (joystick axis, button, etc.) to an
-    output channel with associated processing parameters.
+    A value maps an input control (joystick axis, button, etc.) to an
+    output value with associated processing parameters.
     """
 
-    name: str  # Channel name (e.g., "throttle", "steering", "ch1")
+    name: str  # Value name (e.g., "throttle", "steering", "ch1")
     control: Union[AxisControl, ButtonControl, VirtualControl]
 
-    # Processing parameters (per-channel)
+    # Processing parameters (per-value)
     reversed: bool = False
     latching: bool = False
     endpoint: Optional[Endpoint] = None
 
     def __post_init__(self):
-        """Validate channel configuration on creation."""
+        """Validate value configuration on creation."""
         if not self.name or not isinstance(self.name, str):
             raise ValueError(
-                f"Channel name must be a non-empty string, got {self.name!r}"
+                f"Value name must be a non-empty string, got {self.name!r}"
             )
 
         # Create default endpoint if not provided

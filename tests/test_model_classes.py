@@ -4,8 +4,9 @@ Tests for the strongly-typed model classes.
 
 import pytest
 from pi_tx.domain import (
+    Channels,
     Endpoint,
-    Channel,
+    Value,
     VirtualControl,
     DifferentialMix,
     AggregateSource,
@@ -53,10 +54,10 @@ class TestControlType:
         assert ControlType.BUTTON.value == "button"
 
 
-class TestChannel:
-    """Tests for Channel dataclass."""
+class TestValue:
+    """Tests for Value dataclass."""
 
-    def test_create_basic_channel(self):
+    def test_create_basic_value(self):
         control = AxisControl(
             event_code=1,
             event_type=EventType.ABS,
@@ -67,18 +68,18 @@ class TestChannel:
             fuzz=0,
             flat=15,
         )
-        ch = Channel(
+        value = Value(
             name="elevator",
             control=control,
         )
-        assert ch.name == "elevator"
-        assert ch.control.name == "stick-y"
-        assert ch.control.control_type == ControlType.BIPOLAR
-        assert ch.reversed is False
-        assert ch.endpoint.min == -1.0
-        assert ch.endpoint.max == 1.0
+        assert value.name == "elevator"
+        assert value.control.name == "stick-y"
+        assert value.control.control_type == ControlType.BIPOLAR
+        assert value.reversed is False
+        assert value.endpoint.min == -1.0
+        assert value.endpoint.max == 1.0
 
-    def test_create_channel_with_all_fields(self):
+    def test_create_value_with_all_fields(self):
         control = AxisControl(
             event_code=0,
             event_type=EventType.ABS,
@@ -89,17 +90,17 @@ class TestChannel:
             fuzz=0,
             flat=15,
         )
-        ch = Channel(
+        value = Value(
             name="throttle_channel",
             control=control,
             reversed=True,
             endpoint=Endpoint(min=0.0, max=1.0),
         )
-        assert ch.control.name == "throttle"
-        assert ch.reversed is True
-        assert ch.endpoint.min == 0.0
+        assert value.control.name == "throttle"
+        assert value.reversed is True
+        assert value.endpoint.min == 0.0
 
-    def test_invalid_channel_id(self):
+    def test_invalid_value_name(self):
         control = AxisControl(
             event_code=1,
             event_type=EventType.ABS,
@@ -110,8 +111,8 @@ class TestChannel:
             fuzz=0,
             flat=15,
         )
-        with pytest.raises(ValueError, match="Channel name must be a non-empty string"):
-            Channel(
+        with pytest.raises(ValueError, match="Value name must be a non-empty string"):
+            Value(
                 name="",
                 control=control,
             )
@@ -128,7 +129,7 @@ class TestChannel:
             flat=15,
         )
         with pytest.raises(ValueError, match="min.*must be less than max"):
-            Channel(
+            Value(
                 id=1,
                 control=control,
                 endpoint=Endpoint(min=1.0, max=-1.0),
@@ -152,7 +153,7 @@ class TestDifferentialMix:
         with pytest.raises(ValueError, match="cannot be the same"):
             DifferentialMix(left_channel="same", right_channel="same")
 
-    def test_invalid_left_channel(self):
+    def test_invalid_left_value(self):
         with pytest.raises(ValueError, match="left_channel must be a non-empty string"):
             DifferentialMix(left_channel="", right_channel="right")
 
@@ -220,16 +221,17 @@ class TestModel:
         model = Model(
             name="test_model",
             model_id="abc123",
-            channels=[
-                Channel(
+            values=[
+                Value(
                     name="ch1",
                     control=control,
                 )
             ],
+            channels=Channels(),
         )
         assert model.name == "test_model"
         assert model.model_id == "abc123"
-        assert len(model.channels) == 1
+        assert len(model.values) == 1
         assert len(model.mixes) == 0
         assert model.rx_num == 0
 
@@ -261,10 +263,10 @@ class TestModel:
         model = Model(
             name="test_model",
             model_id="abc123",
-            channels=[
-                Channel(name="ch1", control=control1),
-                Channel(name="ch2", control=control2),
-                Channel(name="ch3", control=control3),
+            values=[
+                Value(name="ch1", control=control1),
+                Value(name="ch2", control=control2),
+                Value(name="ch3", control=control3),
             ],
             mixes=[
                 DifferentialMix(left_channel="ch1", right_channel="ch2"),
@@ -277,13 +279,14 @@ class TestModel:
                 ),
             ],
             rx_num=1,
+            channels=Channels(),
         )
         assert len(model.mixes) == 2
         assert isinstance(model.mixes[0], DifferentialMix)
         assert isinstance(model.mixes[1], AggregateMix)
         assert model.rx_num == 1
 
-    def test_duplicate_channel_ids_raises_error(self):
+    def test_duplicate_value_names_raises_error(self):
         control1 = AxisControl(
             event_code=1,
             event_type=EventType.ABS,
@@ -304,14 +307,15 @@ class TestModel:
             fuzz=0,
             flat=15,
         )
-        with pytest.raises(ValueError, match="Duplicate channel names"):
+        with pytest.raises(ValueError, match="Duplicate value names"):
             Model(
                 name="test_model",
                 model_id="abc123",
-                channels=[
-                    Channel(name="duplicate", control=control1),
-                    Channel(name="duplicate", control=control2),
+                values=[
+                    Value(name="duplicate", control=control1),
+                    Value(name="duplicate", control=control2),
                 ],
+                channels=Channels(),
             )
 
     def test_invalid_differential_mix_reference(self):
@@ -329,9 +333,10 @@ class TestModel:
             Model(
                 name="test_model",
                 model_id="abc123",
-                channels=[
-                    Channel(name="ch1", control=control),
+                values=[
+                    Value(name="ch1", control=control),
                 ],
+                channels=Channels(),
                 mixes=[
                     DifferentialMix(left_channel="ch1", right_channel="ch99"),
                 ],
@@ -352,9 +357,10 @@ class TestModel:
             Model(
                 name="test_model",
                 model_id="abc123",
-                channels=[
-                    Channel(name="ch1", control=control),
+                values=[
+                    Value(name="ch1", control=control),
                 ],
+                channels=Channels(),
                 mixes=[
                     AggregateMix(
                         sources=[AggregateSource(channel_name="ch99")],
@@ -377,9 +383,10 @@ class TestModel:
             Model(
                 name="test_model",
                 model_id="abc123",
-                channels=[
-                    Channel(name="ch1", control=control),
+                values=[
+                    Value(name="ch1", control=control),
                 ],
+                channels=Channels(),
                 mixes=[
                     AggregateMix(
                         sources=[AggregateSource(channel_name="ch1")],
@@ -403,13 +410,14 @@ class TestModel:
             Model(
                 name="test_model",
                 model_id="abc123",
-                channels=[
-                    Channel(name="ch1", control=control),
+                values=[
+                    Value(name="ch1", control=control),
                 ],
                 rx_num=99,
+                channels=Channels(),
             )
 
-    def test_get_channel_by_id(self):
+    def test_get_value_by_name(self):
         control1 = AxisControl(
             event_code=1,
             event_type=EventType.ABS,
@@ -433,20 +441,21 @@ class TestModel:
         model = Model(
             name="test_model",
             model_id="abc123",
-            channels=[
-                Channel(name="ch1", control=control1),
-                Channel(name="ch2", control=control2),
+            values=[
+                Value(name="ch1", control=control1),
+                Value(name="ch2", control=control2),
             ],
+            channels=Channels(),
         )
-        ch = model.get_channel_by_name("ch2")
-        assert ch is not None
-        assert ch.name == "ch2"
-        assert ch.control.name == "aileron"
+        value = model.get_value_by_name("ch2")
+        assert value is not None
+        assert value.name == "ch2"
+        assert value.control.name == "aileron"
 
-        ch_not_found = model.get_channel_by_name("ch99")
-        assert ch_not_found is None
+        value_not_found = model.get_value_by_name("ch99")
+        assert value_not_found is None
 
-    def test_get_channel_by_name(self):
+    def test_get_value_by_control_name(self):
         control1 = AxisControl(
             event_code=1,
             event_type=EventType.ABS,
@@ -470,14 +479,15 @@ class TestModel:
         model = Model(
             name="test_model",
             model_id="abc123",
-            channels=[
-                Channel(name="ch1", control=control1),
-                Channel(name="ch2", control=control2),
+            values=[
+                Value(name="ch1", control=control1),
+                Value(name="ch2", control=control2),
             ],
+            channels=Channels(),
         )
-        ch = model.get_channel_by_control_name("aileron")
-        assert ch is not None
-        assert ch.name == "ch2"
+        value = model.get_value_by_control_name("aileron")
+        assert value is not None
+        assert value.name == "ch2"
 
-        ch_not_found = model.get_channel_by_control_name("nonexistent")
-        assert ch_not_found is None
+        value_not_found = model.get_value_by_control_name("nonexistent")
+        assert value_not_found is None

@@ -10,7 +10,8 @@ Tests the three-stage processing:
 import pytest
 from pi_tx.domain import (
     Model,
-    Channel,
+    Channels,
+    Value,
     Endpoint,
     DifferentialMix,
     AggregateMix,
@@ -29,7 +30,8 @@ class TestRawValuesInitialization:
         model = Model(
             name="test",
             model_id="test123",
-            channels=[Channel(name="ch1", control=virtual_ctrl)],
+            values=[Value(name="ch1", control=virtual_ctrl)],
+            channels=Channels(),
         )
         assert hasattr(model, "raw_values")
         assert isinstance(model.raw_values, dict)
@@ -41,7 +43,8 @@ class TestRawValuesInitialization:
         model = Model(
             name="test",
             model_id="test123",
-            channels=[Channel(name="ch1", control=virtual_ctrl)],
+            values=[Value(name="ch1", control=virtual_ctrl)],
+            channels=Channels(),
         )
         assert hasattr(model, "processed_values")
         assert isinstance(model.processed_values, dict)
@@ -57,7 +60,8 @@ class TestReadValuesBasic:
         model = Model(
             name="test",
             model_id="test123",
-            channels=[Channel(name="ch1", control=virtual_ctrl)],
+            values=[Value(name="ch1", control=virtual_ctrl)],
+            channels=Channels(),
         )
         result = model.readValues()
         assert result == {"ch1": 0.0}
@@ -68,7 +72,8 @@ class TestReadValuesBasic:
         model = Model(
             name="test",
             model_id="test123",
-            channels=[Channel(name="ch1", control=virtual_ctrl)],
+            values=[Value(name="ch1", control=virtual_ctrl)],
+            channels=Channels(),
         )
         model.raw_values = {"ch1": 0.5}
         result = model.readValues()
@@ -81,10 +86,11 @@ class TestReadValuesBasic:
         model = Model(
             name="test",
             model_id="test123",
-            channels=[
-                Channel(name="ch1", control=virtual_ctrl1),
-                Channel(name="ch2", control=virtual_ctrl2),
+            values=[
+                Value(name="ch1", control=virtual_ctrl1),
+                Value(name="ch2", control=virtual_ctrl2),
             ],
+            channels=Channels(),
         )
         model.raw_values = {"ch1": 0.5, "ch2": -0.3}
         result = model.readValues()
@@ -96,7 +102,8 @@ class TestReadValuesBasic:
         model = Model(
             name="test",
             model_id="test123",
-            channels=[Channel(name="ch1", control=virtual_ctrl)],
+            values=[Value(name="ch1", control=virtual_ctrl)],
+            channels=Channels(),
         )
         model.raw_values = {"ch1": 0.7}
         result = model.readValues()
@@ -117,10 +124,11 @@ class TestProcessMethod:
         model = Model(
             name="test",
             model_id="test123",
-            channels=[
-                Channel(name="ch1", control=virtual_ctrl1),
-                Channel(name="ch2", control=virtual_ctrl2),
+            values=[
+                Value(name="ch1", control=virtual_ctrl1),
+                Value(name="ch2", control=virtual_ctrl2),
             ],
+            channels=Channels(),
         )
         model.raw_values = {"ch1": 0.5, "ch2": -0.3}
         model._process()
@@ -133,9 +141,9 @@ class TestProcessMethod:
         model = Model(
             name="test",
             model_id="test123",
-            channels=[
-                Channel(name="left_track", control=virtual_left),
-                Channel(name="right_track", control=virtual_right),
+            values=[
+                Value(name="left_track", control=virtual_left),
+                Value(name="right_track", control=virtual_right),
             ],
             mixes=[
                 DifferentialMix(
@@ -144,8 +152,9 @@ class TestProcessMethod:
                     inverse=False,
                 )
             ],
+            channels=Channels(),
         )
-        
+
         # Test forward motion (both same)
         model.raw_values = {"left_track": 0.5, "right_track": 0.5}
         model._process()
@@ -159,9 +168,9 @@ class TestProcessMethod:
         model = Model(
             name="test",
             model_id="test123",
-            channels=[
-                Channel(name="left_track", control=virtual_left),
-                Channel(name="right_track", control=virtual_right),
+            values=[
+                Value(name="left_track", control=virtual_left),
+                Value(name="right_track", control=virtual_right),
             ],
             mixes=[
                 DifferentialMix(
@@ -169,8 +178,9 @@ class TestProcessMethod:
                     right_channel="right_track",
                 )
             ],
+            channels=Channels(),
         )
-        
+
         # Forward + Turn: left=0.2, right=0.8
         # forward = (0.2 + 0.8) / 2 = 0.5
         # turn = (0.8 - 0.2) / 2 = 0.3
@@ -188,9 +198,9 @@ class TestProcessMethod:
         model = Model(
             name="test",
             model_id="test123",
-            channels=[
-                Channel(name="left_track", control=virtual_left),
-                Channel(name="right_track", control=virtual_right),
+            values=[
+                Value(name="left_track", control=virtual_left),
+                Value(name="right_track", control=virtual_right),
             ],
             mixes=[
                 DifferentialMix(
@@ -199,8 +209,9 @@ class TestProcessMethod:
                     inverse=True,
                 )
             ],
+            channels=Channels(),
         )
-        
+
         model.raw_values = {"left_track": 0.2, "right_track": 0.8}
         model._process()
         # With inverse, the values should be swapped
@@ -215,10 +226,10 @@ class TestProcessMethod:
         model = Model(
             name="test",
             model_id="test123",
-            channels=[
-                Channel(name="ch1", control=virtual_ch1),
-                Channel(name="ch2", control=virtual_ch2),
-                Channel(name="sound", control=virtual_sound),
+            values=[
+                Value(name="ch1", control=virtual_ch1),
+                Value(name="ch2", control=virtual_ch2),
+                Value(name="sound", control=virtual_sound),
             ],
             mixes=[
                 AggregateMix(
@@ -229,8 +240,9 @@ class TestProcessMethod:
                     target_channel="sound",
                 )
             ],
+            channels=Channels(),
         )
-        
+
         # |0.6| * 0.5 + |-0.4| * 0.5 = 0.3 + 0.2 = 0.5
         model.raw_values = {"ch1": 0.6, "ch2": -0.4, "sound": 0.0}
         model._process()
@@ -244,10 +256,10 @@ class TestProcessMethod:
         model = Model(
             name="test",
             model_id="test123",
-            channels=[
-                Channel(name="ch1", control=virtual_ch1),
-                Channel(name="ch2", control=virtual_ch2),
-                Channel(name="sound", control=virtual_sound),
+            values=[
+                Value(name="ch1", control=virtual_ch1),
+                Value(name="ch2", control=virtual_ch2),
+                Value(name="sound", control=virtual_sound),
             ],
             mixes=[
                 AggregateMix(
@@ -258,8 +270,9 @@ class TestProcessMethod:
                     target_channel="sound",
                 )
             ],
+            channels=Channels(),
         )
-        
+
         # 1.0 * 0.8 + 1.0 * 0.8 = 1.6 -> clamped to 1.0
         model.raw_values = {"ch1": 1.0, "ch2": 1.0, "sound": 0.0}
         model._process()
@@ -275,7 +288,8 @@ class TestPostProcessMethod:
         model = Model(
             name="test",
             model_id="test123",
-            channels=[Channel(name="ch1", control=virtual_ctrl, reversed=False)],
+            values=[Value(name="ch1", control=virtual_ctrl, reversed=False)],
+            channels=Channels(),
         )
         model.processed_values = {"ch1": 0.5}
         model._postProcess()
@@ -287,7 +301,8 @@ class TestPostProcessMethod:
         model = Model(
             name="test",
             model_id="test123",
-            channels=[Channel(name="ch1", control=virtual_ctrl, reversed=True)],
+            values=[Value(name="ch1", control=virtual_ctrl, reversed=True)],
+            channels=Channels(),
         )
         model.processed_values = {"ch1": 0.5}
         model._postProcess()
@@ -299,7 +314,8 @@ class TestPostProcessMethod:
         model = Model(
             name="test",
             model_id="test123",
-            channels=[Channel(name="ch1", control=virtual_ctrl, reversed=True)],
+            values=[Value(name="ch1", control=virtual_ctrl, reversed=True)],
+            channels=Channels(),
         )
         model.processed_values = {"ch1": 0.7}
         model._postProcess()
@@ -311,25 +327,26 @@ class TestPostProcessMethod:
         model = Model(
             name="test",
             model_id="test123",
-            channels=[
-                Channel(
+            values=[
+                Value(
                     name="ch1",
                     control=virtual_ctrl,
                     endpoint=Endpoint(min=-0.5, max=0.5),
                 )
             ],
+            channels=Channels(),
         )
-        
+
         # Test clamping to max
         model.processed_values = {"ch1": 0.8}
         model._postProcess()
         assert model.processed_values["ch1"] == 0.5
-        
+
         # Test clamping to min
         model.processed_values = {"ch1": -0.9}
         model._postProcess()
         assert model.processed_values["ch1"] == -0.5
-        
+
         # Test no clamping when in range
         model.processed_values = {"ch1": 0.3}
         model._postProcess()
@@ -341,16 +358,17 @@ class TestPostProcessMethod:
         model = Model(
             name="test",
             model_id="test123",
-            channels=[
-                Channel(
+            values=[
+                Value(
                     name="ch1",
                     control=virtual_ctrl,
                     reversed=True,
                     endpoint=Endpoint(min=-0.5, max=0.5),
                 )
             ],
+            channels=Channels(),
         )
-        
+
         # 0.8 -> reversed to -0.8 -> clamped to -0.5
         model.processed_values = {"ch1": 0.8}
         model._postProcess()
@@ -366,16 +384,17 @@ class TestIntegratedProcessing:
         model = Model(
             name="test",
             model_id="test123",
-            channels=[
-                Channel(
+            values=[
+                Value(
                     name="ch1",
                     control=virtual_ctrl,
                     reversed=True,
                     endpoint=Endpoint(min=-0.6, max=0.6),
                 )
             ],
+            channels=Channels(),
         )
-        
+
         # 0.5 -> reversed to -0.5 -> no clamping needed
         model.raw_values = {"ch1": 0.5}
         result = model.readValues()
@@ -388,9 +407,9 @@ class TestIntegratedProcessing:
         model = Model(
             name="test",
             model_id="test123",
-            channels=[
-                Channel(name="left_track", control=virtual_left, reversed=True),
-                Channel(name="right_track", control=virtual_right, reversed=False),
+            values=[
+                Value(name="left_track", control=virtual_left, reversed=True),
+                Value(name="right_track", control=virtual_right, reversed=False),
             ],
             mixes=[
                 DifferentialMix(
@@ -398,8 +417,9 @@ class TestIntegratedProcessing:
                     right_channel="right_track",
                 )
             ],
+            channels=Channels(),
         )
-        
+
         # After diff mix: left=0.6, right=0.4
         # After reversing: left=-0.6, right=0.4
         model.raw_values = {"left_track": 0.6, "right_track": 0.4}
@@ -412,24 +432,24 @@ class TestIntegratedProcessing:
         virtual_left = VirtualControl(name="left", control_type=ControlType.BIPOLAR)
         virtual_right = VirtualControl(name="right", control_type=ControlType.BIPOLAR)
         virtual_sound = VirtualControl(name="sound", control_type=ControlType.UNIPOLAR)
-        
+
         model = Model(
             name="complex",
             model_id="complex123",
-            channels=[
-                Channel(
+            values=[
+                Value(
                     name="left_track",
                     control=virtual_left,
                     reversed=True,
                     endpoint=Endpoint(min=-0.8, max=0.8),
                 ),
-                Channel(
+                Value(
                     name="right_track",
                     control=virtual_right,
                     reversed=False,
                     endpoint=Endpoint(min=-0.8, max=0.8),
                 ),
-                Channel(name="sound", control=virtual_sound),
+                Value(name="sound", control=virtual_sound),
             ],
             mixes=[
                 DifferentialMix(
@@ -444,11 +464,12 @@ class TestIntegratedProcessing:
                     target_channel="sound",
                 ),
             ],
+            channels=Channels(),
         )
-        
+
         model.raw_values = {"left_track": 0.6, "right_track": 0.4, "sound": 0.0}
         result = model.readValues()
-        
+
         # After differential: left=0.6, right=0.4
         # After aggregate: sound = |0.6|*0.5 + |0.4|*0.5 = 0.5
         # After reversing: left=-0.6, right=0.4, sound=0.5
@@ -463,13 +484,14 @@ class TestIntegratedProcessing:
         model = Model(
             name="test",
             model_id="test123",
-            channels=[Channel(name="ch1", control=virtual_ctrl, reversed=True)],
+            values=[Value(name="ch1", control=virtual_ctrl, reversed=True)],
+            channels=Channels(),
         )
-        
+
         model.raw_values = {"ch1": 0.5}
         result1 = model.readValues()
         result2 = model.readValues()
-        
+
         assert result1 == result2
         assert result1["ch1"] == -0.5
 
@@ -479,13 +501,14 @@ class TestIntegratedProcessing:
         model = Model(
             name="test",
             model_id="test123",
-            channels=[Channel(name="ch1", control=virtual_ctrl)],
+            values=[Value(name="ch1", control=virtual_ctrl)],
+            channels=Channels(),
         )
-        
+
         model.raw_values = {"ch1": 0.5}
         result1 = model.readValues()
         assert result1["ch1"] == 0.5
-        
+
         model.raw_values = {"ch1": 0.8}
         result2 = model.readValues()
         assert result2["ch1"] == 0.8
@@ -501,19 +524,20 @@ class TestEdgeCases:
         model = Model(
             name="test",
             model_id="test123",
-            channels=[
-                Channel(name="ch1", control=virtual_ctrl1),
-                Channel(name="ch2", control=virtual_ctrl2),
+            values=[
+                Value(name="ch1", control=virtual_ctrl1),
+                Value(name="ch2", control=virtual_ctrl2),
             ],
+            channels=Channels(),
         )
-        
+
         # Only ch1 in raw_values
         model.raw_values = {"ch1": 0.5}
         model._process()
         # After _process, processed_values only has ch1
         assert model.processed_values["ch1"] == 0.5
         assert "ch2" not in model.processed_values
-        
+
         # But after _postProcess, all channels will be present
         model._postProcess()
         assert model.processed_values["ch1"] == 0.5
@@ -526,12 +550,13 @@ class TestEdgeCases:
         model = Model(
             name="test",
             model_id="test123",
-            channels=[
-                Channel(name="ch1", control=virtual_ctrl1),
-                Channel(name="ch2", control=virtual_ctrl2, reversed=True),
+            values=[
+                Value(name="ch1", control=virtual_ctrl1),
+                Value(name="ch2", control=virtual_ctrl2, reversed=True),
             ],
+            channels=Channels(),
         )
-        
+
         # Only ch1 in processed_values
         model.processed_values = {"ch1": 0.5}
         model._postProcess()
@@ -543,7 +568,8 @@ class TestEdgeCases:
         model = Model(
             name="empty",
             model_id="empty123",
-            channels=[],
+            values=[],
+            channels=Channels(),
         )
         result = model.readValues()
         assert result == {}

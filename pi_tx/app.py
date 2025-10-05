@@ -16,17 +16,14 @@ def run():
     APP_INSTANCE = app  # Store for UART sampler access
 
     def sample():
-        # Get values from the current model
+        # Get channel values from the current model
         if app.current_model:
-            values = app.current_model.readValues()
-            snap = [values.get(ch.name, 0.0) for ch in app.current_model.channels]
+            # Use getChannels() which returns 14 channels mapped according to model config
+            snap = app.current_model.getChannels()
         else:
-            snap = []
+            snap = [0.0] * 14
 
-        # Pad to 14 channels (AFHDS2A protocol limit)
-        if len(snap) < 14:
-            snap = snap + [0.0] * (14 - len(snap))
-        return snap[:14]
+        return snap
 
     port = os.environ.get("UART_PORT") or "/dev/null"
     uart = UartTx(port=port)

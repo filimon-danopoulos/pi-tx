@@ -10,7 +10,7 @@ from collections import defaultdict
 
 from evdev import InputDevice, ecodes
 
-from .channel import Channel
+from .value import Value
 from .mixing import DifferentialMix, AggregateMix
 from .virtual_control import VirtualControl
 from ..logging import get_logger
@@ -34,18 +34,43 @@ class ModelIcon(str, Enum):
 
 
 @dataclass
+class Channels:
+    """
+    Channel mapping for AFHDS2A protocol (14 channels max).
+    
+    Maps value names to specific channel positions (1-14).
+    Any unmapped channels will be set to neutral (0.0).
+    """
+    ch_1: Optional[str] = None
+    ch_2: Optional[str] = None
+    ch_3: Optional[str] = None
+    ch_4: Optional[str] = None
+    ch_5: Optional[str] = None
+    ch_6: Optional[str] = None
+    ch_7: Optional[str] = None
+    ch_8: Optional[str] = None
+    ch_9: Optional[str] = None
+    ch_10: Optional[str] = None
+    ch_11: Optional[str] = None
+    ch_12: Optional[str] = None
+    ch_13: Optional[str] = None
+    ch_14: Optional[str] = None
+
+
+@dataclass
 class Model:
     """
     Complete RC model configuration.
 
-    Defines all channels, mixing, and processing for a complete RC model.
+    Defines all values, mixing, and processing for a complete RC model.
     This is the top-level configuration object that gets loaded and used
     by the transmitter system.
     """
 
     name: str
     model_id: str
-    channels: List[Channel]
+    values: List[Value]
+    channels: Channels
     mixes: List[Union[DifferentialMix, AggregateMix]] = field(default_factory=list)
     rx_num: int = 0  # Receiver number (0-15)
     bind_timestamp: str = ""  # ISO timestamp
@@ -79,16 +104,16 @@ class Model:
         """
         errors = []
 
-        # Check for duplicate channel names
-        channel_names = [ch.name for ch in self.channels]
-        if len(channel_names) != len(set(channel_names)):
+        # Check for duplicate value names
+        value_names = [v.name for v in self.values]
+        if len(value_names) != len(set(value_names)):
             duplicates = [
-                name for name in channel_names if channel_names.count(name) > 1
+                name for name in value_names if value_names.count(name) > 1
             ]
-            errors.append(f"Duplicate channel names found: {set(duplicates)}")
+            errors.append(f"Duplicate value names found: {set(duplicates)}")
 
         # Validate mix references
-        valid_names = set(channel_names)
+        valid_names = set(value_names)
 
         for i, mix in enumerate(self.mixes):
             if isinstance(mix, DifferentialMix):
@@ -118,24 +143,56 @@ class Model:
 
         return errors
 
-    def get_channel_by_name(self, channel_name: str) -> Optional[Channel]:
-        """Get a channel by its name."""
-        for ch in self.channels:
-            if ch.name == channel_name:
-                return ch
+    def get_value_by_name(self, value_name: str) -> Optional[Value]:
+        """Get a value by its name."""
+        for v in self.values:
+            if v.name == value_name:
+                return v
         return None
 
-    def get_channel_by_control_name(self, control_name: str) -> Optional[Channel]:
-        """Get a channel by its control's name."""
-        for ch in self.channels:
-            if ch.control.name == control_name:
-                return ch
+    def get_value_by_control_name(self, control_name: str) -> Optional[Value]:
+        """Get a value by its control's name."""
+        for v in self.values:
+            if v.control.name == control_name:
+                return v
         return None
 
     def readValues(self) -> dict[str, float]:
         self._process()
         self._postProcess()
         return self.processed_values.copy()
+
+    def getChannels(self) -> List[float]:
+        """
+        Get channel values mapped according to the channels configuration.
+        
+        Returns a list of 14 float values (one per AFHDS2A channel).
+        Maps value names to specific channel positions as defined in the channels field.
+        Unmapped channels default to 0.0 (neutral).
+        
+        Returns:
+            List of 14 floats representing channel values.
+        """
+        # Get processed values
+        values_dict = self.readValues()
+        
+        # Initialize all 14 channels to neutral (0.0)
+        channel_list = [0.0] * 14
+        
+        # Use channel mapping
+        channel_fields = [
+            self.channels.ch_1, self.channels.ch_2, self.channels.ch_3,
+            self.channels.ch_4, self.channels.ch_5, self.channels.ch_6,
+            self.channels.ch_7, self.channels.ch_8, self.channels.ch_9,
+            self.channels.ch_10, self.channels.ch_11, self.channels.ch_12,
+            self.channels.ch_13, self.channels.ch_14
+        ]
+        
+        for i, value_name in enumerate(channel_fields):
+            if value_name is not None:
+                channel_list[i] = values_dict.get(value_name, 0.0)
+        
+        return channel_list
 
     def _process(self):
         # Start with a copy of raw values
@@ -151,15 +208,15 @@ class Model:
         self.processed_values = values
 
     def _postProcess(self):
-        for channel in self.channels:
+        for value_obj in self.values:
             # Get the value (post-mixing or original)
-            value = self.processed_values.get(channel.name, 0.0)
+            value = self.processed_values.get(value_obj.name, 0.0)
 
-            # Apply channel post-processing
-            value = channel.postProcess(value)
+            # Apply value post-processing
+            value = value_obj.postProcess(value)
 
             # Update the processed value
-            self.processed_values[channel.name] = value
+            self.processed_values[value_obj.name] = value
 
     async def connect(self):
         """
@@ -183,19 +240,19 @@ class Model:
             self._log.warning(f"Model '{self.name}' is already connected")
             return
 
-        # Gather unique device paths from all channels (excluding virtual controls)
+        # Gather unique device paths from all values (excluding virtual controls)
         device_paths: Set[str] = set()
-        channel_map = defaultdict(list)  # device_path -> list of (channel, control)
+        value_map = defaultdict(list)  # device_path -> list of (value, control)
 
-        for channel in self.channels:
-            if isinstance(channel.control, VirtualControl):
+        for value_obj in self.values:
+            if isinstance(value_obj.control, VirtualControl):
                 continue
 
             # Get device_path from the control's device_path property
-            device_path = channel.control.device_path
+            device_path = value_obj.control.device_path
             if device_path:
                 device_paths.add(device_path)
-                channel_map[device_path].append((channel, channel.control))
+                value_map[device_path].append((value_obj, value_obj.control))
 
         if not device_paths:
             self._log.warning("No physical input devices found in model configuration")
@@ -244,16 +301,16 @@ class Model:
 
                     last_process_time[event_key] = current_time
 
-                    # Find matching channels for this event
-                    matching_channels = [
-                        (ch, ctrl)
-                        for ch, ctrl in channel_map[device.path]
+                    # Find matching values for this event
+                    matching_values = [
+                        (v, ctrl)
+                        for v, ctrl in value_map[device.path]
                         if hasattr(ctrl, "event_code")
                         and ctrl.event_code == event.code
                         and ctrl.event_type.value == event.type
                     ]
 
-                    for channel, control in matching_channels:
+                    for value_obj, control in matching_values:
                         # Normalize the value
                         if hasattr(control, "normalize"):
                             # AxisControl
@@ -263,15 +320,15 @@ class Model:
                             normalized = float(event.value)
 
                         # Apply pre-processing (latching)
-                        preprocessed = channel.preProcess(normalized)
+                        preprocessed = value_obj.preProcess(normalized)
 
                         # Check if value changed and store in raw_values
-                        if last_values.get(channel.name) != preprocessed:
-                            last_values[channel.name] = preprocessed
-                            self.raw_values[channel.name] = preprocessed
+                        if last_values.get(value_obj.name) != preprocessed:
+                            last_values[value_obj.name] = preprocessed
+                            self.raw_values[value_obj.name] = preprocessed
 
                             self._log.debug(
-                                f"{channel.name} ({control.name}): "
+                                f"{value_obj.name} ({control.name}): "
                                 f"raw={event.value} norm={normalized:.3f} pre={preprocessed:.3f}"
                             )
             except asyncio.CancelledError:

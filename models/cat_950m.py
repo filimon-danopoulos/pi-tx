@@ -18,8 +18,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from pi_tx.domain import (
     Model,
     ModelIcon,
-    Channel,
+    Value,
     Endpoint,
+    Channels,
     DifferentialMix,
     AggregateMix,
     AggregateSource,
@@ -43,40 +44,48 @@ cat_950m = Model(
     model_id="a3f8c7d9e1f54b2a9856f9e8d7c9f6bc",
     rx_num=2,
     icon=ModelIcon.TRACTOR,
-    channels=[
-        Channel(name="drive", control=left_stick.axes.stick_y, reversed=True),
-        Channel(
+    values=[
+        Value(name="drive", control=left_stick.axes.stick_y, reversed=True),
+        Value(
             name="steering",
             control=left_stick.axes.stick_x,
             endpoint=Endpoint(-0.7, 0.7),
         ),
-        Channel(
+        Value(
             name="bucket_lift",
             control=right_stick.axes.stick_y,
             reversed=True,
         ),
-        Channel(
+        Value(
             name="bucket_tilt",
             control=right_stick.axes.stick_z,
         ),
-        Channel(
-            name="quick_connect", control=right_stick.buttons.trigger, latching=True
-        ),
-        Channel(
+        Value(name="quick_connect", control=right_stick.buttons.trigger, latching=True),
+        Value(
             name="work_lights",
             control=left_stick.buttons.sb_2,
             latching=True,
         ),
-        Channel(
+        Value(
             name="beacon",
             control=left_stick.buttons.sb_3,
             latching=True,
         ),
-        Channel(
+        Value(
             name="sound",
             control=virtual_sound_mix,
         ),
     ],
+    channels=Channels(
+        ch_1="drive",
+        ch_2="steering",
+        ch_3="bucket_lift",
+        ch_4="bucket_tilt",
+        ch_5="quick_connect",
+        ch_6="work_lights",
+        ch_7="beacon",
+        ch_10="sound",
+    ),
     mixes=[
         AggregateMix(
             sources=[
@@ -96,7 +105,7 @@ if __name__ == "__main__":
     print(f"Model: {cat_950m.name}")
     print(f"Model ID: {cat_950m.model_id}")
     print(f"RX Number: {cat_950m.rx_num}")
-    print(f"Channels: {len(cat_950m.channels)}")
+    print(f"Values: {len(cat_950m.values)}")
 
     # Count mix types
     differential_count = sum(
@@ -116,8 +125,17 @@ if __name__ == "__main__":
         print("✓ Model validation passed!")
 
     print()
-    print("Channels:")
-    for ch in cat_950m.channels:
-        print(f"  {ch.name}: {ch.control.name} ({ch.control.control_type.value})")
-        if ch.reversed:
+    print("Values:")
+    for val in cat_950m.values:
+        print(f"  {val.name}: {val.control.name} ({val.control.control_type.value})")
+        if val.reversed:
             print(f"       Reversed: Yes")
+    
+    print()
+    print("Channel Mapping:")
+    if cat_950m.channels:
+        for i in range(1, 15):
+            ch_attr = f"ch_{i}"
+            value_name = getattr(cat_950m.channels, ch_attr)
+            if value_name:
+                print(f"  Channel {i}: {value_name}")

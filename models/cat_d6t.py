@@ -14,8 +14,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from pi_tx.domain import (
     Model,
     ModelIcon,
-    Channel,
+    Value,
     Endpoint,
+    Channels,
     DifferentialMix,
     AggregateMix,
     AggregateSource,
@@ -41,47 +42,57 @@ cat_d6t = Model(
     model_id="f2f9b6c8c2e44d3d8947e7d6b8c6e5ab",
     rx_num=1,
     icon=ModelIcon.BULLDOZER,
-    channels=[
-        Channel(
+    values=[
+        Value(
             name="left_track",
             control=left_stick.axes.stick_y,
             endpoint=Endpoint(-0.7, 0.7),
         ),
-        Channel(
+        Value(
             name="right_track",
             control=left_stick.axes.stick_x,
             endpoint=Endpoint(-0.7, 0.7),
             reversed=True,
         ),
-        Channel(
+        Value(
             name="left_cylinder",
             control=right_stick.axes.stick_y,
             reversed=True,
         ),
-        Channel(
+        Value(
             name="right_cylinder",
             control=right_stick.axes.stick_x,
         ),
-        Channel(
+        Value(
             name="ripper",
             control=left_stick.axes.hat_y,
             reversed=True,
         ),
-        Channel(
+        Value(
             name="lights_cylinders",
             control=left_stick.buttons.sb_2,
             latching=True,
         ),
-        Channel(
+        Value(
             name="lights_roof",
             control=left_stick.buttons.sb_2,
             latching=True,
         ),
-        Channel(
+        Value(
             name="sound",
             control=virtual_sound_mix,
         ),
     ],
+    channels=Channels(
+        ch_1="left_track",
+        ch_2="right_track",
+        ch_3="left_cylinder",
+        ch_4="right_cylinder",
+        ch_5="ripper",
+        ch_6="lights_cylinders",
+        ch_7="lights_roof",
+        ch_10="sound",
+    ),
     mixes=[
         DifferentialMix(
             left_channel="left_track",
@@ -111,7 +122,7 @@ if __name__ == "__main__":
     print(f"Model: {cat_d6t.name}")
     print(f"Model ID: {cat_d6t.model_id}")
     print(f"RX Number: {cat_d6t.rx_num}")
-    print(f"Channels: {len(cat_d6t.channels)}")
+    print(f"Values: {len(cat_d6t.values)}")
 
     # Count mix types
     differential_count = sum(1 for m in cat_d6t.mixes if isinstance(m, DifferentialMix))
@@ -131,8 +142,8 @@ if __name__ == "__main__":
         print("✓ Model validation passed!")
 
     print()
-    print("Channels:")
-    for ch in cat_d6t.channels:
-        print(f"  {ch.name}: {ch.control.name} ({ch.control.control_type.value})")
-        if ch.reversed:
+    print("Values:")
+    for val in cat_d6t.values:
+        print(f"  {val.name}: {val.control.name} ({val.control.control_type.value})")
+        if val.reversed:
             print(f"       Reversed: Yes")

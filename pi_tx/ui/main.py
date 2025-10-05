@@ -161,9 +161,9 @@ class PiTxApp(MDApp):
         try:
             # Build channel mapping from the current model
             mapping = {}
-            for i, channel in enumerate(self.current_model.channels, start=1):
+            for i, value in enumerate(self.current_model.values, start=1):
                 mapping[str(i)] = {
-                    "name": channel.name,
+                    "name": value.name,
                     "control_type": "bipolar",  # Default to bipolar
                     "device_path": None,  # Virtual channels
                     "control_code": None,
@@ -173,7 +173,7 @@ class PiTxApp(MDApp):
                 self.channel_panel.rebuild(mapping)
                 log.info(f"Initialized channel panel with {len(mapping)} channels")
         except Exception as e:
-            log.error(f"Failed to initialize model channels: {e}", exc_info=True)
+            log.error(f"Failed to initialize model values: {e}", exc_info=True)
 
     def _stop_model_listening(self):
         """Stop the current model's connection gracefully."""
@@ -234,7 +234,7 @@ class PiTxApp(MDApp):
             values = self.current_model.readValues()
 
             # Convert to list for channel_panel (which expects a list)
-            snap = [values.get(ch.name, 0.0) for ch in self.current_model.channels]
+            snap = [values.get(val.name, 0.0) for val in self.current_model.values]
 
             # Only update UI if snapshot actually changed
             if snap != self._last_snapshot:
