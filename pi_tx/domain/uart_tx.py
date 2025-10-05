@@ -103,7 +103,7 @@ class MultiSerialTX:
         sub_protocol: int = AFHDS2A_PWM_IBUS,
         rx_num: int = 0,
         option: int = 0,
-        channel_count: int = 10,
+        channel_count: int = 14,
         frame_rate_hz: float = 45.0,
     ):
         self._uart = uart

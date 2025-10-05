@@ -23,17 +23,17 @@ def run():
         else:
             snap = []
 
-        # Pad to 16 channels
-        if len(snap) < 16:
-            snap = snap + [0.0] * (16 - len(snap))
-        return snap[:16]
+        # Pad to 14 channels (AFHDS2A protocol limit)
+        if len(snap) < 14:
+            snap = snap + [0.0] * (14 - len(snap))
+        return snap[:14]
 
     port = os.environ.get("UART_PORT") or "/dev/null"
     uart = UartTx(port=port)
     log.info("Using UART on port: %s", port)
     if uart.open():
 
-        tx = MultiSerialTX(uart, channel_count=16)
+        tx = MultiSerialTX(uart)
         tx.set_sampler(sample, normalized=True)  # -1..1 input expected
         tx.start()
 
