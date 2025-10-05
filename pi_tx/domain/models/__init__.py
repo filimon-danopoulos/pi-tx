@@ -18,7 +18,7 @@ All classes are re-exported here for convenient imports.
 from .channel import Channel, Endpoint
 from .virtual_control import VirtualControl
 from .mixing import DifferentialMix, AggregateSource, AggregateMix
-from .model import Model
+from .model import Model, ModelIcon
 
 # Export all public classes
 __all__ = [
@@ -29,4 +29,5 @@ __all__ = [
     "AggregateSource",
     "AggregateMix",
     "Model",
+    "ModelIcon",
 ]

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 import sys
+import importlib.util
 from pathlib import Path
 from typing import Optional
 
@@ -23,7 +24,9 @@ log = get_logger(__name__)
 class ModelListItem(OneLineAvatarIconListItem):
     """List item for a model with icon."""
 
-    def __init__(self, model_name: str, model_path: Path, on_select_callback, **kwargs):
+    def __init__(
+        self, model_name: str, model_path: Path, icon: str, on_select_callback, **kwargs
+    ):
         super().__init__(**kwargs)
         self.model_name = model_name
         self.model_path = model_path
@@ -33,8 +36,8 @@ class ModelListItem(OneLineAvatarIconListItem):
         self.text = model_name
 
         # Add icon on the left
-        icon = IconLeftWidget(icon="bulldozer")
-        self.add_widget(icon)
+        icon_widget = IconLeftWidget(icon=icon)
+        self.add_widget(icon_widget)
 
         # Handle click
         self.on_release = self._on_item_click
@@ -100,12 +103,55 @@ class ModelPage(MDBoxLayout):
 
         for model_file in model_files:
             model_name = model_file.stem
+
+            # Load the model to get its icon
+            icon = self._get_model_icon(model_name, model_file)
+
             item = ModelListItem(
                 model_name=model_name,
                 model_path=model_file,
+                icon=icon,
                 on_select_callback=self._on_model_selected,
             )
             self.model_list.add_widget(item)
+
+    def _get_model_icon(self, model_name: str, model_path: Path) -> str:
+        """Load a model file and extract its icon."""
+        try:
+            # Load the model module
+            spec = importlib.util.spec_from_file_location(model_name, model_path)
+            if spec is None or spec.loader is None:
+                log.warning(f"Cannot load model from {model_path}")
+                return "excavator"  # Default icon
+
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+
+            # Get the model instance (convention: model variable has same name as file)
+            if hasattr(module, model_name):
+                model = getattr(module, model_name)
+                if hasattr(model, "icon"):
+                    # Icon can be either a ModelIcon enum or a string
+                    icon = model.icon
+                    return icon.value if hasattr(icon, 'value') else str(icon)
+            else:
+                # Try to find any Model instance in the module
+                from ....domain.models import Model
+
+                for attr_name in dir(module):
+                    attr = getattr(module, attr_name)
+                    if isinstance(attr, Model):
+                        if hasattr(attr, "icon"):
+                            # Icon can be either a ModelIcon enum or a string
+                            icon = attr.icon
+                            return icon.value if hasattr(icon, 'value') else str(icon)
+                        break
+
+            # Default if no icon found
+            return "excavator"
+        except Exception as e:
+            log.warning(f"Failed to load icon for {model_name}: {e}")
+            return "excavator"  # Default icon
 
     def _on_model_selected(self, model_name: str, model_path: Path):
         """Handle model selection."""

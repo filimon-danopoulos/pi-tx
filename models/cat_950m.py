@@ -17,6 +17,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from pi_tx.domain.models import (
     Model,
+    ModelIcon,
     Channel,
     Endpoint,
     DifferentialMix,
@@ -40,7 +41,8 @@ virtual_sound_mix = VirtualControl(
 cat_950m = Model(
     name="cat_950m",
     model_id="a3f8c7d9e1f54b2a9856f9e8d7c9f6bc",
-    rx_num=1,
+    rx_num=2,
+    icon=ModelIcon.TRACTOR,
     channels=[
         Channel(
             name="drive",

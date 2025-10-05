@@ -13,6 +13,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from pi_tx.domain.models import (
     Model,
+    ModelIcon,
     Channel,
     Endpoint,
     DifferentialMix,
@@ -39,6 +40,7 @@ cat_d6t = Model(
     name="cat_d6t",
     model_id="f2f9b6c8c2e44d3d8947e7d6b8c6e5ab",
     rx_num=1,
+    icon=ModelIcon.BULLDOZER,
     channels=[
         Channel(
             name="left_track",

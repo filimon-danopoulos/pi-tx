@@ -4,6 +4,7 @@ Top-level Model class for RC transmitter configuration.
 
 import asyncio
 from dataclasses import dataclass, field
+from enum import Enum
 from typing import List, Optional, Set, Union
 from collections import defaultdict
 
@@ -13,6 +14,23 @@ from .channel import Channel
 from .mixing import DifferentialMix, AggregateMix
 from .virtual_control import VirtualControl
 from ...logging_config import get_logger
+
+
+class ModelIcon(str, Enum):
+    """Available Material Design icons for RC models."""
+    
+    BULLDOZER = "bulldozer"
+    CAR_PICKUP = "car-pickup"
+    DUMP_TRUCK = "dump-truck"
+    EXCAVATOR = "excavator"
+    FIRE_TRUCK = "fire-truck"
+    FORKLIFT = "forklift"
+    TOW_TRUCK = "tow-truck"
+    TRACTOR = "tractor"
+    TRACTOR_VARIANT = "tractor-variant"
+    TRUCK = "truck"
+    TRUCK_FLATBED = "truck-flatbed"
+    VAN_UTILITY = "van-utility"
 
 
 @dataclass
@@ -31,13 +49,14 @@ class Model:
     mixes: List[Union[DifferentialMix, AggregateMix]] = field(default_factory=list)
     rx_num: int = 0  # Receiver number (0-15)
     bind_timestamp: str = ""  # ISO timestamp
+    icon: ModelIcon = ModelIcon.EXCAVATOR  # Material Design icon name for the model
 
     def __post_init__(self):
         """Validate model configuration on creation."""
         # Initialize value storage fields
         self.raw_values: dict[str, float] = {}
         self.processed_values: dict[str, float] = {}
-        
+
         # Initialize connection state
         self._devices: List[InputDevice] = []
         self._tasks: List[asyncio.Task] = []
@@ -147,7 +166,7 @@ class Model:
         Connect to all configured input devices and start collecting normalized values.
 
         This method opens input devices and starts monitoring for events,
-        storing normalized raw values in self.raw_values. It does NOT apply 
+        storing normalized raw values in self.raw_values. It does NOT apply
         mixes, reversing, or endpoints. Call readValues() to process the collected values.
 
         Uses asyncio and evdev to monitor input events from all physical controls
@@ -196,7 +215,9 @@ class Model:
             self._log.error("No devices could be opened")
             return
 
-        self._log.info(f"Listening to {len(self._devices)} device(s) for model '{self.name}'...")
+        self._log.info(
+            f"Listening to {len(self._devices)} device(s) for model '{self.name}'..."
+        )
 
         # Track last values to detect changes
         last_values = {}
@@ -257,10 +278,14 @@ class Model:
                 self._log.debug(f"Monitor task cancelled for device {device.path}")
                 raise
             except Exception as e:
-                self._log.error(f"Error monitoring device {device.path}: {e}", exc_info=True)
+                self._log.error(
+                    f"Error monitoring device {device.path}: {e}", exc_info=True
+                )
 
         # Run all device monitors concurrently
-        self._tasks = [asyncio.create_task(monitor_device(dev)) for dev in self._devices]
+        self._tasks = [
+            asyncio.create_task(monitor_device(dev)) for dev in self._devices
+        ]
         self._is_connected = True
         self._log.info(f"Model '{self.name}' connected successfully")
 
@@ -303,7 +328,7 @@ class Model:
     async def listen(self, duration: Optional[float] = None):
         """
         Legacy method: Connect and listen for a specified duration.
-        
+
         This is a compatibility wrapper around connect()/disconnect().
         For new code, prefer using connect() and disconnect() directly.
 
@@ -311,7 +336,7 @@ class Model:
             duration: Optional time limit in seconds. If None, runs until interrupted.
         """
         await self.connect()
-        
+
         if duration:
             try:
                 await asyncio.sleep(duration)
