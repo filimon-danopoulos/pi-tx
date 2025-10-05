@@ -4,7 +4,7 @@ from __future__ import annotations
 from kivymd.uix.boxlayout import MDBoxLayout
 from kivy.uix.scrollview import ScrollView
 
-from ui.components.channel_panel import ChannelPanel
+from ...components.channel_panel import ChannelPanel
 
 
 class LivePage(MDBoxLayout):

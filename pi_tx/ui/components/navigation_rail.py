@@ -5,7 +5,8 @@ from kivymd.uix.navigationrail import MDNavigationRail, MDNavigationRailItem
 from kivymd.uix.boxlayout import MDBoxLayout
 from kivymd.uix.label import MDLabel
 
-from ui.pages.live.live_page import LivePage
+from ..pages.live.live_page import LivePage
+from ..pages.model import ModelPage
 
 
 class PlaceholderPage(MDBoxLayout):
@@ -31,12 +32,13 @@ class MainNavigationRail(MDBoxLayout):
       - System Settings
     """
 
-    def __init__(self, **kwargs):
+    def __init__(self, on_model_changed=None, **kwargs):
         super().__init__(orientation="horizontal", **kwargs)
+        self.on_model_changed = on_model_changed
 
         # Create views
         self.channels_view = LivePage()
-        self.model_settings_view = PlaceholderPage("Model Settings")
+        self.model_settings_view = ModelPage(on_model_changed=on_model_changed)
         self.system_settings_view = PlaceholderPage("System Settings")
 
         # Store views for easy access

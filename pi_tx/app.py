@@ -5,7 +5,6 @@ Config.set("graphics", "width", "800")
 Config.set("graphics", "height", "480")
 Config.set("graphics", "resizable", "0")  # Disable resizing for embedded display
 
-from .input.controls import InputController
 import os, traceback
 from .logging_config import get_logger
 
@@ -14,13 +13,11 @@ from .domain.channel_store import channel_store
 
 UART_SENDER = None
 UART_INIT_ERROR = None  # store last init exception string
-from .input.controls import InputController
-from .gui.gui import create_gui
+from .ui.main import create_app
 
 
 def run():
-    controller = InputController(debug=False)
-    app = create_gui(controller)
+    app = create_app()
     # Enable UART on Raspberry Pi hardware OR when debug mode is explicitly requested
     try:
         from .infrastructure.uart_tx import ON_PI

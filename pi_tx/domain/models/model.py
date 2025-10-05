@@ -37,6 +37,12 @@ class Model:
         # Initialize value storage fields
         self.raw_values: dict[str, float] = {}
         self.processed_values: dict[str, float] = {}
+        
+        # Initialize connection state
+        self._devices: List[InputDevice] = []
+        self._tasks: List[asyncio.Task] = []
+        self._is_connected = False
+        self._log = get_logger(f"{self.__class__.__name__}")
 
         errors = self.validate()
         if errors:
@@ -136,25 +142,27 @@ class Model:
             # Update the processed value
             self.processed_values[channel.name] = value
 
-    async def listen(self, duration: Optional[float] = None):
+    async def connect(self):
         """
-        Listen to all configured input devices and collect normalized values.
+        Connect to all configured input devices and start collecting normalized values.
 
-        This method collects and normalizes raw input values, storing them in
-        self.raw_values. It does NOT apply mixes, reversing, or endpoints.
-        Call readValues() to process the collected values.
+        This method opens input devices and starts monitoring for events,
+        storing normalized raw values in self.raw_values. It does NOT apply 
+        mixes, reversing, or endpoints. Call readValues() to process the collected values.
 
         Uses asyncio and evdev to monitor input events from all physical controls
         configured in the model. Virtual controls are skipped.
 
-        Args:
-            duration: Optional time limit in seconds. If None, runs until interrupted.
+        Call disconnect() to gracefully stop listening and close devices.
 
         Example:
-            await model.listen()  # Run forever
-            await model.listen(10)  # Run for 10 seconds
+            await model.connect()  # Start listening in background
+            # ... do other work ...
+            await model.disconnect()  # Stop listening
         """
-        log = get_logger(f"{self.__class__.__name__}.listen")
+        if self._is_connected:
+            self._log.warning(f"Model '{self.name}' is already connected")
+            return
 
         # Gather unique device paths from all channels (excluding virtual controls)
         device_paths: Set[str] = set()
@@ -171,26 +179,24 @@ class Model:
                 channel_map[device_path].append((channel, channel.control))
 
         if not device_paths:
-            log.warning("No physical input devices found in model configuration")
+            self._log.warning("No physical input devices found in model configuration")
             return
 
         # Open all devices
-        devices = []
+        self._devices = []
         for path in device_paths:
             try:
                 dev = InputDevice(path)
-                devices.append(dev)
-                log.info(f"Opened device: {dev.name} at {path}")
+                self._devices.append(dev)
+                self._log.info(f"Opened device: {dev.name} at {path}")
             except Exception as e:
-                log.warning(f"Could not open device {path}: {e}")
+                self._log.warning(f"Could not open device {path}: {e}")
 
-        if not devices:
-            log.error("No devices could be opened")
+        if not self._devices:
+            self._log.error("No devices could be opened")
             return
 
-        log.info(f"Listening to {len(devices)} device(s) for model '{self.name}'...")
-        if duration:
-            log.info(f"Will stop after {duration} seconds")
+        self._log.info(f"Listening to {len(self._devices)} device(s) for model '{self.name}'...")
 
         # Track last values to detect changes
         last_values = {}
@@ -198,9 +204,9 @@ class Model:
         min_interval = 0.01  # 10ms = 100Hz
         last_process_time = {}  # Track last process time per (device, code, type)
 
-        try:
-            # Create async tasks for each device
-            async def monitor_device(device):
+        # Create async tasks for each device
+        async def monitor_device(device):
+            try:
                 async for event in device.async_read_loop():
                     # Skip sync and misc events
                     if event.type in (ecodes.EV_SYN, ecodes.EV_MSC):
@@ -243,35 +249,79 @@ class Model:
                             last_values[channel.name] = preprocessed
                             self.raw_values[channel.name] = preprocessed
 
-                            log.debug(
+                            self._log.debug(
                                 f"{channel.name} ({control.name}): "
                                 f"raw={event.value} norm={normalized:.3f} pre={preprocessed:.3f}"
                             )
+            except asyncio.CancelledError:
+                self._log.debug(f"Monitor task cancelled for device {device.path}")
+                raise
+            except Exception as e:
+                self._log.error(f"Error monitoring device {device.path}: {e}", exc_info=True)
 
-            # Run all device monitors concurrently
-            tasks = [asyncio.create_task(monitor_device(dev)) for dev in devices]
+        # Run all device monitors concurrently
+        self._tasks = [asyncio.create_task(monitor_device(dev)) for dev in self._devices]
+        self._is_connected = True
+        self._log.info(f"Model '{self.name}' connected successfully")
 
-            if duration:
-                # Run for specified duration
-                try:
-                    await asyncio.wait_for(
-                        asyncio.gather(*tasks, return_exceptions=True), timeout=duration
-                    )
-                except asyncio.CancelledError:
-                    # Cancel all tasks when we're cancelled
-                    for task in tasks:
-                        task.cancel()
-                    raise
-            else:
-                # Run until interrupted
-                await asyncio.gather(*tasks, return_exceptions=True)
+    async def disconnect(self):
+        """
+        Disconnect from all input devices and stop collecting values.
 
-        except asyncio.TimeoutError:
-            log.info(f"Listening stopped after {duration} seconds")
-        except (KeyboardInterrupt, asyncio.CancelledError):
-            log.info("Listening interrupted")
-        finally:
-            # Close all devices
-            for dev in devices:
+        Cancels all monitoring tasks and closes all open devices gracefully.
+        After disconnection, the model can be reconnected by calling connect() again.
+        """
+        if not self._is_connected:
+            self._log.debug(f"Model '{self.name}' is not connected")
+            return
+
+        self._log.info(f"Disconnecting model '{self.name}'...")
+
+        # Cancel all monitoring tasks
+        for task in self._tasks:
+            if not task.done():
+                task.cancel()
+
+        # Wait for all tasks to complete/cancel
+        if self._tasks:
+            await asyncio.gather(*self._tasks, return_exceptions=True)
+
+        # Close all devices
+        for dev in self._devices:
+            try:
                 dev.close()
-            log.info("All devices closed")
+                self._log.debug(f"Closed device: {dev.path}")
+            except Exception as e:
+                self._log.warning(f"Error closing device {dev.path}: {e}")
+
+        # Clear state
+        self._devices = []
+        self._tasks = []
+        self._is_connected = False
+        self._log.info(f"Model '{self.name}' disconnected successfully")
+
+    async def listen(self, duration: Optional[float] = None):
+        """
+        Legacy method: Connect and listen for a specified duration.
+        
+        This is a compatibility wrapper around connect()/disconnect().
+        For new code, prefer using connect() and disconnect() directly.
+
+        Args:
+            duration: Optional time limit in seconds. If None, runs until interrupted.
+        """
+        await self.connect()
+        
+        if duration:
+            try:
+                await asyncio.sleep(duration)
+            except asyncio.CancelledError:
+                pass
+            finally:
+                await self.disconnect()
+        else:
+            # Run until interrupted
+            try:
+                await asyncio.Event().wait()  # Wait forever
+            except (KeyboardInterrupt, asyncio.CancelledError):
+                await self.disconnect()
