@@ -1,6 +1,7 @@
 # Python bytecode
 __pycache__/
 *.py[cod]
+.pytest_cache
 *$py.class
 
 # Virtual environment
@@ -18,3 +19,4 @@ dist/
 # OS-specific
 .DS_Store
 Thumbs.db
+

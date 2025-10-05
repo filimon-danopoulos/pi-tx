@@ -32,7 +32,7 @@ def test_uart_serial_config(monkeypatch):
 
     serial_mod = types.SimpleNamespace(Serial=DummySerial)
     monkeypatch.setitem(sys.modules, "serial", serial_mod)
-    import pi_tx.infrastructure.uart_tx as uart_tx
+    import pi_tx.domain.uart_tx as uart_tx
     importlib.reload(uart_tx)
 
     u = uart_tx.UartTx(port="TESTPORT")
@@ -45,7 +45,7 @@ def test_uart_serial_config(monkeypatch):
 
 
 def test_channel_value_clamp_and_encoding():
-    from pi_tx.infrastructure.uart_tx import DebugUartTx, MultiSerialTX
+    from pi_tx.domain.uart_tx import DebugUartTx, MultiSerialTX
 
     dbg = DebugUartTx()
     dbg.open()
@@ -62,7 +62,7 @@ def test_channel_value_clamp_and_encoding():
 
 
 def test_frame_rate_approximation():
-    from pi_tx.infrastructure.uart_tx import DebugUartTx, MultiSerialTX
+    from pi_tx.domain.uart_tx import DebugUartTx, MultiSerialTX
 
     dbg = DebugUartTx(max_frames=200)
     dbg.open()
@@ -78,7 +78,7 @@ def test_frame_rate_approximation():
 
 
 def test_frame_timing_jitter():
-    from pi_tx.infrastructure.uart_tx import DebugUartTx, MultiSerialTX
+    from pi_tx.domain.uart_tx import DebugUartTx, MultiSerialTX
     import statistics
 
     dbg = DebugUartTx(max_frames=400)

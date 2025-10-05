@@ -2,7 +2,6 @@
 Main UI application for pi-tx.
 
 Uses navigation rail with live channel display and placeholder pages for model/system settings.
-Integrates with the channel_store from the old application.
 """
 
 import sys
@@ -24,8 +23,8 @@ from kivy.uix.screenmanager import ScreenManager
 from kivy.clock import Clock
 from kivy.core.window import Window
 
-from ..logging_config import init_logging, get_logger
-from ..domain.channel_store import channel_store
+from ..logging import init_logging, get_logger
+from ..settings import MODELS_DIR, LAST_MODEL_FILE
 from .components.navigation_rail import MainNavigationRail
 
 log = get_logger(__name__)
@@ -41,7 +40,7 @@ class PiTxApp(MDApp):
         self.current_model = None
         self._listen_thread = None
         self._event_loop = None
-        self._models_dir = Path(__file__).parent.parent.parent / "models"
+        self._models_dir = MODELS_DIR
         
         # Add models directory to path
         sys.path.insert(0, str(self._models_dir))
@@ -88,9 +87,8 @@ class PiTxApp(MDApp):
     def _load_initial_model(self):
         """Load the initial model (last selected or default)."""
         try:
-            last_model_file = self._models_dir.parent / ".last_model"
-            if last_model_file.exists():
-                model_name = last_model_file.read_text().strip()
+            if LAST_MODEL_FILE.exists():
+                model_name = LAST_MODEL_FILE.read_text().strip()
                 log.info(f"Loading last selected model: {model_name}")
             else:
                 model_name = "cat_d6t"
@@ -132,7 +130,7 @@ class PiTxApp(MDApp):
                 model = getattr(module, model_name)
             else:
                 # Try to find any Model instance in the module
-                from ..domain.models import Model
+                from ..domain import Model
                 model = None
                 for attr_name in dir(module):
                     attr = getattr(module, attr_name)

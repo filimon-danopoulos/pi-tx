@@ -49,7 +49,7 @@ class DifferentialMix:
         orig_left = raw_values.get(self.left_channel, 0.0)
         orig_right = raw_values.get(self.right_channel, 0.0)
 
-        # Apply differential mixing (working formula from channel_store)
+        # Apply differential mixing
         left_val = orig_left + orig_right
         right_val = orig_right - orig_left
 

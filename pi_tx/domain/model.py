@@ -13,7 +13,7 @@ from evdev import InputDevice, ecodes
 from .channel import Channel
 from .mixing import DifferentialMix, AggregateMix
 from .virtual_control import VirtualControl
-from ...logging_config import get_logger
+from ..logging import get_logger
 
 
 class ModelIcon(str, Enum):

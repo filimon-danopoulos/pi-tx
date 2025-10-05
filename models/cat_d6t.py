@@ -11,7 +11,7 @@ from pathlib import Path
 # Add parent directory to path so we can import pi_tx
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from pi_tx.domain.models import (
+from pi_tx.domain import (
     Model,
     ModelIcon,
     Channel,
@@ -21,7 +21,7 @@ from pi_tx.domain.models import (
     AggregateSource,
     VirtualControl,
 )
-from pi_tx.input.mappings.stick_mapping import (
+from pi_tx.domain.stick_mapping import (
     left_stick,
     right_stick,
     ControlType,

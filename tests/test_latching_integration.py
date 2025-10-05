@@ -7,13 +7,13 @@ simulate the flow by calling preProcess on channels before readValues.
 """
 
 import pytest
-from pi_tx.domain.models import (
+from pi_tx.domain import (
     Model,
     Channel,
     Endpoint,
     VirtualControl,
 )
-from pi_tx.input.mappings.stick_mapping import ControlType
+from pi_tx.domain.stick_mapping import ControlType
 
 
 class TestLatchingInModelProcessing:
@@ -217,7 +217,7 @@ class TestLatchingInModelProcessing:
 
     def test_latching_with_all_features(self):
         """Test latching combined with reversing, endpoints, and mixes."""
-        from pi_tx.domain.models import AggregateMix, AggregateSource
+        from pi_tx.domain import AggregateMix, AggregateSource
 
         btn = VirtualControl(name="btn", control_type=ControlType.BUTTON)
         axis = VirtualControl(name="axis", control_type=ControlType.UNIPOLAR)

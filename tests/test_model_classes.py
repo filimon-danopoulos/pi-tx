@@ -3,7 +3,7 @@ Tests for the strongly-typed model classes.
 """
 
 import pytest
-from pi_tx.domain.models import (
+from pi_tx.domain import (
     Endpoint,
     Channel,
     VirtualControl,
@@ -12,7 +12,7 @@ from pi_tx.domain.models import (
     AggregateMix,
     Model,
 )
-from pi_tx.input.mappings.stick_mapping import (
+from pi_tx.domain.stick_mapping import (
     AxisControl,
     ButtonControl,
     EventType,

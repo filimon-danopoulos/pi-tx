@@ -5,8 +5,8 @@ Channel-related classes for RC model configuration.
 from dataclasses import dataclass, field
 from typing import Union, Optional
 
-from pi_tx.input.mappings.stick_mapping import AxisControl, ButtonControl
-from pi_tx.domain.models.virtual_control import VirtualControl
+from pi_tx.domain.stick_mapping import AxisControl, ButtonControl
+from pi_tx.domain.virtual_control import VirtualControl
 
 
 @dataclass

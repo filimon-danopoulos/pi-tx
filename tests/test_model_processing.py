@@ -8,7 +8,7 @@ Tests the three-stage processing:
 """
 
 import pytest
-from pi_tx.domain.models import (
+from pi_tx.domain import (
     Model,
     Channel,
     Endpoint,
@@ -17,7 +17,7 @@ from pi_tx.domain.models import (
     AggregateSource,
     VirtualControl,
 )
-from pi_tx.input.mappings.stick_mapping import ControlType
+from pi_tx.domain.stick_mapping import ControlType
 
 
 class TestRawValuesInitialization:

@@ -8,8 +8,8 @@ before mixing.
 """
 
 import pytest
-from pi_tx.domain.models import Channel, Endpoint, VirtualControl
-from pi_tx.input.mappings.stick_mapping import ControlType
+from pi_tx.domain import Channel, Endpoint, VirtualControl
+from pi_tx.domain.stick_mapping import ControlType
 
 
 class TestChannelLatching:

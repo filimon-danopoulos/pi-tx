@@ -12,11 +12,11 @@ from kivymd.uix.label import MDLabel
 from kivy.uix.scrollview import ScrollView
 from kivy.metrics import dp
 
-# Add models directory to path
-_models_dir = Path(__file__).parent.parent.parent.parent.parent / "models"
-sys.path.insert(0, str(_models_dir))
+from ....settings import MODELS_DIR, LAST_MODEL_FILE
+from ....logging import get_logger
 
-from ....logging_config import get_logger
+# Add models directory to path
+sys.path.insert(0, str(MODELS_DIR))
 
 log = get_logger(__name__)
 
@@ -88,18 +88,16 @@ class ModelPage(MDBoxLayout):
 
     def _load_models(self):
         """Load all available models from the models directory."""
-        models_dir = Path(__file__).parent.parent.parent.parent.parent / "models"
-
-        if not models_dir.exists():
-            log.error(f"Models directory not found: {models_dir}")
+        if not MODELS_DIR.exists():
+            log.error(f"Models directory not found: {MODELS_DIR}")
             return
 
         # Find all Python files in models directory (excluding __pycache__)
         model_files = sorted(
-            [f for f in models_dir.glob("*.py") if not f.name.startswith("_")]
+            [f for f in MODELS_DIR.glob("*.py") if not f.name.startswith("_")]
         )
 
-        log.info(f"Found {len(model_files)} model files in {models_dir}")
+        log.info(f"Found {len(model_files)} model files in {MODELS_DIR}")
 
         for model_file in model_files:
             model_name = model_file.stem
@@ -136,7 +134,7 @@ class ModelPage(MDBoxLayout):
                     return icon.value if hasattr(icon, 'value') else str(icon)
             else:
                 # Try to find any Model instance in the module
-                from ....domain.models import Model
+                from ....domain import Model
 
                 for attr_name in dir(module):
                     attr = getattr(module, attr_name)
@@ -175,10 +173,7 @@ class ModelPage(MDBoxLayout):
     def _save_last_model(self, model_name: str):
         """Save the last selected model to a file."""
         try:
-            last_model_file = (
-                Path(__file__).parent.parent.parent.parent.parent / ".last_model"
-            )
-            last_model_file.write_text(model_name)
+            LAST_MODEL_FILE.write_text(model_name)
             log.info(f"Saved last model: {model_name}")
         except Exception as e:
             log.error(f"Failed to save last model: {e}")
@@ -186,11 +181,8 @@ class ModelPage(MDBoxLayout):
     def _load_last_model(self):
         """Load and highlight the last selected model."""
         try:
-            last_model_file = (
-                Path(__file__).parent.parent.parent.parent.parent / ".last_model"
-            )
-            if last_model_file.exists():
-                last_model = last_model_file.read_text().strip()
+            if LAST_MODEL_FILE.exists():
+                last_model = LAST_MODEL_FILE.read_text().strip()
                 self.current_model = last_model
                 log.info(f"Last model loaded: {last_model}")
 

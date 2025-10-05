@@ -4,7 +4,7 @@ Virtual control for channels without physical input devices.
 
 from dataclasses import dataclass
 
-from pi_tx.input.mappings.stick_mapping import EventType, ControlType
+from pi_tx.domain.stick_mapping import EventType, ControlType
 
 
 @dataclass(frozen=True)

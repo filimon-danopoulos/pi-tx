@@ -1,6 +1,6 @@
 import time
 
-from pi_tx.infrastructure.uart_tx import DebugUartTx, MultiSerialTX
+from pi_tx.domain.uart_tx import DebugUartTx, MultiSerialTX
 
 
 def xor_checksum(data: bytes) -> int:
