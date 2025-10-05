@@ -1,165 +1,115 @@
 """
 Main UI application for pi-tx.
 
-Loads a hardcoded model (cat_d6t) and displays live channel values
-updated at 30Hz.
+Uses navigation rail with live channel display and placeholder pages for model/system settings.
+Integrates with the channel_store from the old application.
 """
 
 import sys
-import asyncio
-import threading
 from pathlib import Path
 
-from kivy.app import App
-from kivy.uix.boxlayout import BoxLayout
-from kivy.uix.label import Label
-from kivy.uix.scrollview import ScrollView
+from kivy.config import Config
+
+Config.set("graphics", "width", "800")
+Config.set("graphics", "height", "480")
+Config.set("graphics", "resizable", "0")
+
+from kivymd.app import MDApp
+from kivymd.uix.floatlayout import MDFloatLayout
+from kivymd.uix.screen import MDScreen
+from kivy.uix.screenmanager import ScreenManager
 from kivy.clock import Clock
 from kivy.core.window import Window
-from kivy.graphics import Color, RoundedRectangle
 
-# Import the cat_d6t model
+# Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from pi_tx.logging_config import init_logging, get_logger
+from pi_tx.domain.channel_store import channel_store
+from pi_tx.input.controls import InputController
+from ui.components.navigation_rail import MainNavigationRail
+
+# Import the cat_d6t model for initialization
 from examples.cat_d6t_example import cat_d6t
-from pi_tx.logging_config import init_logging
+
+log = get_logger(__name__)
 
 
-class ChannelDisplay(BoxLayout):
-    """Widget to display a single channel's value."""
+class PiTxApp(MDApp):
+    """Main Kivy MD application with navigation rail."""
 
-    def __init__(self, channel_name: str, **kwargs):
-        super().__init__(orientation='vertical', size_hint_y=None, height=60, padding=10, spacing=5, **kwargs)
-        self.channel_name = channel_name
-
-        # Channel name label
-        self.name_label = Label(
-            text=channel_name,
-            size_hint_y=None,
-            height=20,
-            font_size='14sp',
-            bold=True,
-            color=(0.8, 0.8, 0.8, 1)
-        )
-        self.add_widget(self.name_label)
-
-        # Value label
-        self.value_label = Label(
-            text='0.000',
-            size_hint_y=None,
-            height=25,
-            font_size='18sp',
-            font_name='RobotoMono-Regular',
-            halign='right',
-            color=(0.5, 0.5, 0.5, 1)
-        )
-        self.add_widget(self.value_label)
-
-        # Background
-        with self.canvas.before:
-            Color(0.17, 0.17, 0.17, 1)
-            self.rect = RoundedRectangle(pos=self.pos, size=self.size, radius=[5])
-
-        self.bind(pos=self.update_rect, size=self.update_rect)
-
-    def update_rect(self, *args):
-        """Update background rectangle on size/position change."""
-        self.rect.pos = self.pos
-        self.rect.size = self.size
-
-    def update_value(self, value: float):
-        """Update the displayed value."""
-        self.value_label.text = f'{value:7.3f}'
-
-        # Color code based on value
-        if abs(value) < 0.1:
-            color = (0.5, 0.5, 0.5, 1)  # Gray for neutral
-        elif value > 0:
-            color = (0.3, 0.69, 0.31, 1)  # Green for positive
-        else:
-            color = (0.96, 0.26, 0.21, 1)  # Red for negative
-
-        self.value_label.color = color
-
-
-class MainScreen(BoxLayout):
-    """Main screen layout."""
-
-    def __init__(self, **kwargs):
-        super().__init__(orientation='vertical', padding=20, spacing=10, **kwargs)
-
-        # Title
-        title = Label(
-            text='CAT D6T - Live Channel Values',
-            size_hint_y=None,
-            height=40,
-            font_size='20sp',
-            bold=True,
-            color=(1, 1, 1, 1)
-        )
-        self.add_widget(title)
-
-        # Model info
-        info = Label(
-            text=f'Model: {cat_d6t.name} | RX: {cat_d6t.rx_num} | Channels: {len(cat_d6t.channels)}',
-            size_hint_y=None,
-            height=25,
-            font_size='12sp',
-            color=(0.6, 0.6, 0.6, 1)
-        )
-        self.add_widget(info)
-
-        # ScrollView for channels
-        scroll = ScrollView(size_hint=(1, 1))
-        channel_layout = BoxLayout(orientation='vertical', size_hint_y=None, spacing=5, padding=(0, 10))
-        channel_layout.bind(minimum_height=channel_layout.setter('height'))
-
-        # Create channel displays
-        self.channel_displays = {}
-        for channel in cat_d6t.channels:
-            display = ChannelDisplay(channel.name)
-            self.channel_displays[channel.name] = display
-            channel_layout.add_widget(display)
-
-        scroll.add_widget(channel_layout)
-        self.add_widget(scroll)
-
-    def update_values(self):
-        """Update all channel displays with current values."""
-        try:
-            # Get current processed values from the model
-            values = cat_d6t.readValues()
-
-            # Update each display
-            for channel_name, display in self.channel_displays.items():
-                value = values.get(channel_name, 0.0)
-                display.update_value(value)
-
-        except Exception as e:
-            print(f"Error updating values: {e}")
-
-
-class PiTxApp(App):
-    """Main Kivy application."""
+    def __init__(self, input_controller: InputController, **kwargs):
+        super().__init__(**kwargs)
+        self.input_controller = input_controller
+        self.channel_panel = None
+        self._last_snapshot = None
 
     def build(self):
-        """Build the application."""
+        """Build the application UI."""
+        # Set theme
+        self.theme_cls.theme_style = "Dark"
+        self.theme_cls.primary_palette = "Teal"
+        
         # Set window properties
         Window.clearcolor = (0.12, 0.12, 0.12, 1)
-        Window.size = (400, 600)
 
-        # Create main screen
-        self.main_screen = MainScreen()
+        # Create screen manager and screen
+        screen_manager = ScreenManager()
+        screen = MDScreen()
+        root = MDFloatLayout()
 
-        # Schedule updates at 30Hz (~33ms)
-        Clock.schedule_interval(lambda dt: self.main_screen.update_values(), 1/30)
+        try:
+            # Create navigation rail with all pages
+            nav = MainNavigationRail()
+            self.channels_view = nav.channels_view
+            self.channel_panel = nav.channel_panel
+            self.model_settings_view = nav.model_settings_view
+            self.system_settings_view = nav.system_settings_view
+            
+            nav.size_hint = (1, 1)
+            root.add_widget(nav)
+            self._navigation_rail = nav
+        except Exception as e:
+            log.error("Navigation init failed: %s", e)
+            self._navigation_rail = None
 
-        # Start listening to input in background thread
-        self.start_listening()
+        # Initialize the channel panel with the cat_d6t model
+        self._initialize_model()
 
-        return self.main_screen
+        # Schedule polling of model values at 20Hz
+        Clock.schedule_interval(self._poll_store_and_refresh, 1.0 / 20.0)
 
-    def start_listening(self):
+        screen.add_widget(root)
+        screen_manager.add_widget(screen)
+        return screen_manager
+
+    def _initialize_model(self):
+        """Initialize the channel panel with the cat_d6t model."""
+        try:
+            # Build channel mapping from the cat_d6t model
+            mapping = {}
+            for i, channel in enumerate(cat_d6t.channels, start=1):
+                mapping[str(i)] = {
+                    "name": channel.name,
+                    "control_type": "bipolar",  # Default to bipolar for cat_d6t
+                    "device_path": None,  # Virtual channels
+                    "control_code": None,
+                }
+            
+            if self.channel_panel:
+                self.channel_panel.rebuild(mapping)
+                log.info(f"Initialized channel panel with {len(mapping)} channels")
+            
+            # Start the model's listen() method in a background thread
+            self._start_model_listening()
+        except Exception as e:
+            log.error(f"Failed to initialize model: {e}")
+
+    def _start_model_listening(self):
         """Start the model.listen() method in a background thread."""
+        import asyncio
+        import threading
+
         def run_listen():
             # Create a new event loop for this thread
             event_loop = asyncio.new_event_loop()
@@ -169,16 +119,33 @@ class PiTxApp(App):
             try:
                 event_loop.run_until_complete(cat_d6t.listen())
             except Exception as e:
-                print(f"Listen thread error: {e}")
+                log.error(f"Listen thread error: {e}")
             finally:
                 event_loop.close()
 
         listen_thread = threading.Thread(target=run_listen, daemon=True)
         listen_thread.start()
+        log.info("Started model.listen() in background thread")
+
+    def _poll_store_and_refresh(self, dt):
+        """Poll the model and update UI if values changed."""
+        try:
+            # Get processed values from the model (includes mixes and post-processing)
+            values = cat_d6t.readValues()
+            
+            # Convert to list for channel_panel (which expects a list)
+            snap = [values.get(ch.name, 0.0) for ch in cat_d6t.channels]
+
+            # Only update UI if snapshot actually changed
+            if snap != self._last_snapshot:
+                self._last_snapshot = snap[:]  # Store a copy
+                if self.channel_panel:
+                    self.channel_panel.update_values(snap)
+        except Exception as e:
+            log.error(f"Poll/refresh error: {e}")
 
     def on_stop(self):
         """Clean up when application stops."""
-        # The daemon thread will automatically stop when the main thread exits
         return True
 
 
@@ -187,8 +154,12 @@ def main():
     # Initialize logging
     init_logging(level="INFO")
 
+    # Create input controller (debug mode, no real gamepad required)
+    controller = InputController(debug=False)
+
     # Run the Kivy app
-    PiTxApp().run()
+    app = PiTxApp(input_controller=controller)
+    app.run()
 
 
 if __name__ == "__main__":
