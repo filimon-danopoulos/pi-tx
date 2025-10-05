@@ -44,10 +44,7 @@ cat_950m = Model(
     rx_num=2,
     icon=ModelIcon.TRACTOR,
     channels=[
-        Channel(
-            name="drive",
-            control=left_stick.axes.stick_y,
-        ),
+        Channel(name="drive", control=left_stick.axes.stick_y, reversed=True),
         Channel(
             name="steering",
             control=left_stick.axes.stick_x,
