@@ -77,19 +77,16 @@ class AxisControl(Control):
         else:
             normalized = (value - self.min_value) / range_size
 
-        # Apply deadzone (flat)
-        center = 0.5
-        deadzone = self.flat / range_size if range_size > 0 else 0.0
-
-        if abs(normalized - center) < deadzone:
-            normalized = center
-
         # Convert to appropriate range
         if self.control_type == ControlType.BIPOLAR:
             # Convert 0..1 to -1..1
-            return normalized * 2.0 - 1.0
+            result = normalized * 2.0 - 1.0
+            # Apply small center deadzone for bipolar axes
+            if abs(result) < 0.05:
+                return 0.0
+            return result
         else:
-            # Keep as 0..1
+            # Keep as 0..1 for unipolar
             return normalized
 
 
