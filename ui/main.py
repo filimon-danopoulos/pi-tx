@@ -30,7 +30,7 @@ from pi_tx.input.controls import InputController
 from ui.components.navigation_rail import MainNavigationRail
 
 # Import the cat_d6t model for initialization
-from examples.cat_d6t_example import cat_d6t
+from models.cat_d6t import cat_d6t
 
 log = get_logger(__name__)
 
@@ -49,7 +49,7 @@ class PiTxApp(MDApp):
         # Set theme
         self.theme_cls.theme_style = "Dark"
         self.theme_cls.primary_palette = "Teal"
-        
+
         # Set window properties
         Window.clearcolor = (0.12, 0.12, 0.12, 1)
 
@@ -65,7 +65,7 @@ class PiTxApp(MDApp):
             self.channel_panel = nav.channel_panel
             self.model_settings_view = nav.model_settings_view
             self.system_settings_view = nav.system_settings_view
-            
+
             nav.size_hint = (1, 1)
             root.add_widget(nav)
             self._navigation_rail = nav
@@ -95,11 +95,11 @@ class PiTxApp(MDApp):
                     "device_path": None,  # Virtual channels
                     "control_code": None,
                 }
-            
+
             if self.channel_panel:
                 self.channel_panel.rebuild(mapping)
                 log.info(f"Initialized channel panel with {len(mapping)} channels")
-            
+
             # Start the model's listen() method in a background thread
             self._start_model_listening()
         except Exception as e:
@@ -132,7 +132,7 @@ class PiTxApp(MDApp):
         try:
             # Get processed values from the model (includes mixes and post-processing)
             values = cat_d6t.readValues()
-            
+
             # Convert to list for channel_panel (which expects a list)
             snap = [values.get(ch.name, 0.0) for ch in cat_d6t.channels]
 

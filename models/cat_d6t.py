@@ -43,10 +43,12 @@ cat_d6t = Model(
         Channel(
             name="left_track",
             control=left_stick.axes.stick_y,
+            endpoint=Endpoint(-0.7, 0.7),
         ),
         Channel(
             name="right_track",
             control=left_stick.axes.stick_x,
+            endpoint=Endpoint(-0.7, 0.7),
             reversed=True,
         ),
         Channel(
