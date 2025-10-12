@@ -12,7 +12,6 @@ from evdev import InputDevice, ecodes
 
 from .value import Value
 from .mixing import DifferentialMix, AggregateMix
-from .virtual_control import VirtualControl
 from ..logging import get_logger
 
 
@@ -240,12 +239,12 @@ class Model:
             self._log.warning(f"Model '{self.name}' is already connected")
             return
 
-        # Gather unique device paths from all values (excluding virtual controls)
+        # Gather unique device paths from all values (excluding values without controls)
         device_paths: Set[str] = set()
         value_map = defaultdict(list)  # device_path -> list of (value, control)
 
         for value_obj in self.values:
-            if isinstance(value_obj.control, VirtualControl):
+            if value_obj.control is None:
                 continue
 
             # Get device_path from the control's device_path property

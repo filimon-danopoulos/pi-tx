@@ -7,9 +7,9 @@ from pi_tx.domain import (
     Model,
     Channels,
     Value,
-    VirtualControl,
 )
 from pi_tx.domain.stick_mapping import ControlType
+from test_control import TestControl
 
 
 class TestChannelsMapping:
@@ -17,8 +17,8 @@ class TestChannelsMapping:
 
     def test_getchannels_with_sequential_mapping(self):
         """getChannels() with sequential channel mapping."""
-        ctrl1 = VirtualControl(name="ctrl1", control_type=ControlType.BIPOLAR)
-        ctrl2 = VirtualControl(name="ctrl2", control_type=ControlType.UNIPOLAR)
+        ctrl1 = TestControl(name="ctrl1", control_type=ControlType.BIPOLAR)
+        ctrl2 = TestControl(name="ctrl2", control_type=ControlType.UNIPOLAR)
 
         model = Model(
             name="test",
@@ -50,9 +50,9 @@ class TestChannelsMapping:
 
     def test_getchannels_with_mapping(self):
         """getChannels() with Channels mapping should map to specific positions."""
-        ctrl1 = VirtualControl(name="ctrl1", control_type=ControlType.BIPOLAR)
-        ctrl2 = VirtualControl(name="ctrl2", control_type=ControlType.UNIPOLAR)
-        ctrl3 = VirtualControl(name="ctrl3", control_type=ControlType.BIPOLAR)
+        ctrl1 = TestControl(name="ctrl1", control_type=ControlType.BIPOLAR)
+        ctrl2 = TestControl(name="ctrl2", control_type=ControlType.UNIPOLAR)
+        ctrl3 = TestControl(name="ctrl3", control_type=ControlType.BIPOLAR)
 
         model = Model(
             name="test",
@@ -91,7 +91,7 @@ class TestChannelsMapping:
         values = []
         channel_dict = {}
         for i in range(20):
-            ctrl = VirtualControl(name=f"ctrl{i}", control_type=ControlType.UNIPOLAR)
+            ctrl = TestControl(name=f"ctrl{i}", control_type=ControlType.UNIPOLAR)
             values.append(Value(name=f"val{i}", control=ctrl))
             # Only map first 14 to channels
             if i < 14:
@@ -119,8 +119,8 @@ class TestChannelsMapping:
 
     def test_getchannels_with_missing_value(self):
         """getChannels() should handle missing values gracefully."""
-        ctrl1 = VirtualControl(name="ctrl1", control_type=ControlType.BIPOLAR)
-        ctrl2 = VirtualControl(name="ctrl2", control_type=ControlType.UNIPOLAR)
+        ctrl1 = TestControl(name="ctrl1", control_type=ControlType.BIPOLAR)
+        ctrl2 = TestControl(name="ctrl2", control_type=ControlType.UNIPOLAR)
 
         model = Model(
             name="test",

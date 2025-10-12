@@ -5,8 +5,7 @@ Value-related classes for RC model configuration.
 from dataclasses import dataclass, field
 from typing import Union, Optional
 
-from pi_tx.domain.stick_mapping import AxisControl, ButtonControl
-from pi_tx.domain.virtual_control import VirtualControl
+from pi_tx.domain.stick_mapping import AxisControl, ButtonControl, ControlType
 
 
 @dataclass
@@ -43,7 +42,7 @@ class Value:
     """
 
     name: str  # Value name (e.g., "throttle", "steering", "ch1")
-    control: Union[AxisControl, ButtonControl, VirtualControl]
+    control: Optional[Union[AxisControl, ButtonControl]] = None
 
     # Processing parameters (per-value)
     reversed: bool = False
@@ -84,7 +83,7 @@ class Value:
     def postProcess(self, value: float) -> float:
         # Apply reversing
         if self.reversed:
-            if self.control.control_type.value == "bipolar":
+            if self.control and self.control.control_type.value == "bipolar":
                 value = -value
             else:
                 value = 1.0 - value

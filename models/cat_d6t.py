@@ -20,7 +20,6 @@ from pi_tx.domain import (
     DifferentialMix,
     AggregateMix,
     AggregateSource,
-    VirtualControl,
 )
 from pi_tx.domain.stick_mapping import (
     left_stick,
@@ -30,12 +29,6 @@ from pi_tx.domain.stick_mapping import (
 
 
 # Define the cat_d6t model using Python classes
-
-# Create a virtual control for the aggregate mix output
-virtual_sound_mix = VirtualControl(
-    name="sound-mix",
-    control_type=ControlType.UNIPOLAR,
-)
 
 cat_d6t = Model(
     name="cat_d6t",
@@ -78,10 +71,7 @@ cat_d6t = Model(
             control=left_stick.buttons.sb_2,
             latching=True,
         ),
-        Value(
-            name="sound",
-            control=virtual_sound_mix,
-        ),
+        Value(name="sound"),
     ],
     channels=Channels(
         ch_1="left_track",

@@ -7,7 +7,6 @@ from pi_tx.domain import (
     Channels,
     Endpoint,
     Value,
-    VirtualControl,
     DifferentialMix,
     AggregateSource,
     AggregateMix,
@@ -19,6 +18,7 @@ from pi_tx.domain.stick_mapping import (
     EventType,
     ControlType,
 )
+from test_control import TestControl
 
 
 class TestEndpoint:
@@ -256,7 +256,7 @@ class TestModel:
             fuzz=0,
             flat=15,
         )
-        control3 = VirtualControl(
+        control3 = TestControl(
             name="virtual",
             control_type=ControlType.UNIPOLAR,
         )

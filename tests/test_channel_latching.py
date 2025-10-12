@@ -8,8 +8,9 @@ before mixing.
 """
 
 import pytest
-from pi_tx.domain import Value, Endpoint, VirtualControl
+from pi_tx.domain import Value, Endpoint
 from pi_tx.domain.stick_mapping import ControlType
+from test_control import TestControl
 
 
 class TestValueLatching:
@@ -17,7 +18,7 @@ class TestValueLatching:
 
     def test_latching_disabled_passes_through(self):
         """When latching is False, value should pass through preProcess unchanged."""
-        ctrl = VirtualControl(name="test", control_type=ControlType.BUTTON)
+        ctrl = TestControl(name="test", control_type=ControlType.BUTTON)
         value = Value(name="ch1", control=ctrl, latching=False)
 
         # Values should pass through unchanged in preProcess
@@ -27,7 +28,7 @@ class TestValueLatching:
 
     def test_latching_enabled_toggles_on_rising_edge(self):
         """When latching is True, output should toggle on 0->non-zero transitions."""
-        ctrl = VirtualControl(name="test", control_type=ControlType.BUTTON)
+        ctrl = TestControl(name="test", control_type=ControlType.BUTTON)
         value = Value(name="ch1", control=ctrl, latching=True)
 
         # Initial state should be 0.0
@@ -56,7 +57,7 @@ class TestValueLatching:
 
     def test_latching_with_non_zero_values(self):
         """Latching should work with any non-zero value."""
-        ctrl = VirtualControl(name="test", control_type=ControlType.UNIPOLAR)
+        ctrl = TestControl(name="test", control_type=ControlType.UNIPOLAR)
         value = Value(name="ch1", control=ctrl, latching=True)
 
         # Initial state
@@ -82,7 +83,7 @@ class TestValueLatching:
 
     def test_latching_with_reversing(self):
         """Latching is applied in preProcess, reversing in postProcess."""
-        ctrl = VirtualControl(name="test", control_type=ControlType.UNIPOLAR)
+        ctrl = TestControl(name="test", control_type=ControlType.UNIPOLAR)
         value = Value(name="ch1", control=ctrl, latching=True, reversed=True)
 
         # Initial state in preProcess
@@ -111,7 +112,7 @@ class TestValueLatching:
 
     def test_latching_with_bipolar_reversing(self):
         """Latching with bipolar control type reverses with negation."""
-        ctrl = VirtualControl(name="test", control_type=ControlType.BIPOLAR)
+        ctrl = TestControl(name="test", control_type=ControlType.BIPOLAR)
         value = Value(name="ch1", control=ctrl, latching=True, reversed=True)
 
         # Initial state: 0.0 in preProcess
@@ -140,7 +141,7 @@ class TestValueLatching:
 
     def test_latching_with_endpoints(self):
         """Latching is applied in preProcess, endpoints in postProcess."""
-        ctrl = VirtualControl(name="test", control_type=ControlType.UNIPOLAR)
+        ctrl = TestControl(name="test", control_type=ControlType.UNIPOLAR)
         value = Value(
             name="ch1", control=ctrl, latching=True, endpoint=Endpoint(min=0.2, max=0.8)
         )
@@ -171,7 +172,7 @@ class TestValueLatching:
 
     def test_latching_multiple_rapid_transitions(self):
         """Latching should handle rapid on/off/on transitions correctly."""
-        ctrl = VirtualControl(name="test", control_type=ControlType.BUTTON)
+        ctrl = TestControl(name="test", control_type=ControlType.BUTTON)
         value = Value(name="ch1", control=ctrl, latching=True)
 
         # Sequence: 0, 1 (toggle), 0, 1 (toggle), 0, 1 (toggle), 0
@@ -185,7 +186,7 @@ class TestValueLatching:
 
     def test_latching_state_persistence(self):
         """Latching state should persist across many zero inputs."""
-        ctrl = VirtualControl(name="test", control_type=ControlType.BUTTON)
+        ctrl = TestControl(name="test", control_type=ControlType.BUTTON)
         value = Value(name="ch1", control=ctrl, latching=True)
 
         # Toggle on
@@ -206,7 +207,7 @@ class TestValueLatching:
 
     def test_latching_combined_with_all_features(self):
         """Test latching combined with reversing and endpoints."""
-        ctrl = VirtualControl(name="test", control_type=ControlType.UNIPOLAR)
+        ctrl = TestControl(name="test", control_type=ControlType.UNIPOLAR)
         value = Value(
             name="ch1",
             control=ctrl,
@@ -237,7 +238,7 @@ class TestValueLatching:
 
     def test_latching_initialization(self):
         """Channel should initialize with latching state at 0.0."""
-        ctrl = VirtualControl(name="test", control_type=ControlType.BUTTON)
+        ctrl = TestControl(name="test", control_type=ControlType.BUTTON)
         value = Value(name="ch1", control=ctrl, latching=True)
 
         # Before any input, state should be 0.0

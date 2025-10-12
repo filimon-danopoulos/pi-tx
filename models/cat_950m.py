@@ -24,7 +24,6 @@ from pi_tx.domain import (
     DifferentialMix,
     AggregateMix,
     AggregateSource,
-    VirtualControl,
 )
 from pi_tx.domain.stick_mapping import (
     left_stick,
@@ -32,12 +31,6 @@ from pi_tx.domain.stick_mapping import (
     ControlType,
 )
 
-
-# Create a virtual control for the aggregate mix output
-virtual_sound_mix = VirtualControl(
-    name="sound-mix",
-    control_type=ControlType.UNIPOLAR,
-)
 
 cat_950m = Model(
     name="cat_950m",
@@ -71,10 +64,7 @@ cat_950m = Model(
             control=left_stick.buttons.sb_3,
             latching=True,
         ),
-        Value(
-            name="sound",
-            control=virtual_sound_mix,
-        ),
+        Value(name="sound"),
     ],
     channels=Channels(
         ch_1="drive",

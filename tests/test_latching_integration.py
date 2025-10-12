@@ -12,9 +12,9 @@ from pi_tx.domain import (
     Model,
     Value,
     Endpoint,
-    VirtualControl,
 )
 from pi_tx.domain.stick_mapping import ControlType
+from test_control import TestControl
 
 
 class TestLatchingInModelProcessing:
@@ -22,7 +22,7 @@ class TestLatchingInModelProcessing:
 
     def test_latching_channel_in_model(self):
         """Latching should work through full Model.readValues() pipeline."""
-        button_ctrl = VirtualControl(name="btn", control_type=ControlType.BUTTON)
+        button_ctrl = TestControl(name="btn", control_type=ControlType.BUTTON)
         model = Model(
             name="test",
             model_id="test123",
@@ -53,8 +53,8 @@ class TestLatchingInModelProcessing:
 
     def test_multiple_latching_channels_independent(self):
         """Multiple latching channels should maintain independent state."""
-        btn1 = VirtualControl(name="btn1", control_type=ControlType.BUTTON)
-        btn2 = VirtualControl(name="btn2", control_type=ControlType.BUTTON)
+        btn1 = TestControl(name="btn1", control_type=ControlType.BUTTON)
+        btn2 = TestControl(name="btn2", control_type=ControlType.BUTTON)
 
         model = Model(
             name="test",
@@ -97,7 +97,7 @@ class TestLatchingInModelProcessing:
 
     def test_latching_with_reversing_in_model(self):
         """Latching combined with reversing in model context."""
-        btn = VirtualControl(name="btn", control_type=ControlType.UNIPOLAR)
+        btn = TestControl(name="btn", control_type=ControlType.UNIPOLAR)
         model = Model(
             name="test",
             model_id="test123",
@@ -127,7 +127,7 @@ class TestLatchingInModelProcessing:
 
     def test_latching_with_endpoints_in_model(self):
         """Latching combined with endpoints in model context."""
-        btn = VirtualControl(name="btn", control_type=ControlType.BUTTON)
+        btn = TestControl(name="btn", control_type=ControlType.BUTTON)
         model = Model(
             name="test",
             model_id="test123",
@@ -154,8 +154,8 @@ class TestLatchingInModelProcessing:
 
     def test_mixed_latching_and_nonlatching_channels(self):
         """Model with both latching and non-latching channels."""
-        btn = VirtualControl(name="btn", control_type=ControlType.BUTTON)
-        axis = VirtualControl(name="axis", control_type=ControlType.UNIPOLAR)
+        btn = TestControl(name="btn", control_type=ControlType.BUTTON)
+        axis = TestControl(name="axis", control_type=ControlType.UNIPOLAR)
 
         model = Model(
             name="test",
@@ -197,7 +197,7 @@ class TestLatchingInModelProcessing:
 
     def test_latching_state_persists_across_readvalues_calls(self):
         """Latching state should persist across multiple readValues() calls."""
-        btn = VirtualControl(name="btn", control_type=ControlType.BUTTON)
+        btn = TestControl(name="btn", control_type=ControlType.BUTTON)
         model = Model(
             name="test",
             model_id="test123",
@@ -235,9 +235,9 @@ class TestLatchingInModelProcessing:
         """Test latching combined with reversing, endpoints, and mixes."""
         from pi_tx.domain import AggregateMix, AggregateSource
 
-        btn = VirtualControl(name="btn", control_type=ControlType.BUTTON)
-        axis = VirtualControl(name="axis", control_type=ControlType.UNIPOLAR)
-        output = VirtualControl(name="output", control_type=ControlType.UNIPOLAR)
+        btn = TestControl(name="btn", control_type=ControlType.BUTTON)
+        axis = TestControl(name="axis", control_type=ControlType.UNIPOLAR)
+        output = TestControl(name="output", control_type=ControlType.UNIPOLAR)
 
         model = Model(
             name="test",

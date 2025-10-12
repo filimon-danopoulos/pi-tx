@@ -16,9 +16,9 @@ from pi_tx.domain import (
     DifferentialMix,
     AggregateMix,
     AggregateSource,
-    VirtualControl,
 )
 from pi_tx.domain.stick_mapping import ControlType
+from test_control import TestControl
 
 
 class TestRawValuesInitialization:
@@ -26,7 +26,7 @@ class TestRawValuesInitialization:
 
     def test_model_initializes_raw_values(self):
         """raw_values should be initialized as empty dict."""
-        virtual_ctrl = VirtualControl(name="ctrl", control_type=ControlType.BIPOLAR)
+        virtual_ctrl = TestControl(name="ctrl", control_type=ControlType.BIPOLAR)
         model = Model(
             name="test",
             model_id="test123",
@@ -39,7 +39,7 @@ class TestRawValuesInitialization:
 
     def test_model_initializes_processed_values(self):
         """processed_values should be initialized as empty dict."""
-        virtual_ctrl = VirtualControl(name="ctrl", control_type=ControlType.BIPOLAR)
+        virtual_ctrl = TestControl(name="ctrl", control_type=ControlType.BIPOLAR)
         model = Model(
             name="test",
             model_id="test123",
@@ -56,7 +56,7 @@ class TestReadValuesBasic:
 
     def test_read_values_with_no_raw_values(self):
         """readValues() should return all channels with 0.0 when no raw values."""
-        virtual_ctrl = VirtualControl(name="ctrl", control_type=ControlType.BIPOLAR)
+        virtual_ctrl = TestControl(name="ctrl", control_type=ControlType.BIPOLAR)
         model = Model(
             name="test",
             model_id="test123",
@@ -68,7 +68,7 @@ class TestReadValuesBasic:
 
     def test_read_values_with_single_channel(self):
         """readValues() should process a single channel."""
-        virtual_ctrl = VirtualControl(name="ctrl", control_type=ControlType.BIPOLAR)
+        virtual_ctrl = TestControl(name="ctrl", control_type=ControlType.BIPOLAR)
         model = Model(
             name="test",
             model_id="test123",
@@ -81,8 +81,8 @@ class TestReadValuesBasic:
 
     def test_read_values_with_multiple_channels(self):
         """readValues() should process multiple channels."""
-        virtual_ctrl1 = VirtualControl(name="ctrl1", control_type=ControlType.BIPOLAR)
-        virtual_ctrl2 = VirtualControl(name="ctrl2", control_type=ControlType.BIPOLAR)
+        virtual_ctrl1 = TestControl(name="ctrl1", control_type=ControlType.BIPOLAR)
+        virtual_ctrl2 = TestControl(name="ctrl2", control_type=ControlType.BIPOLAR)
         model = Model(
             name="test",
             model_id="test123",
@@ -98,7 +98,7 @@ class TestReadValuesBasic:
 
     def test_read_values_returns_copy_of_processed_values(self):
         """readValues() should return a copy of processed_values dict."""
-        virtual_ctrl = VirtualControl(name="ctrl", control_type=ControlType.BIPOLAR)
+        virtual_ctrl = TestControl(name="ctrl", control_type=ControlType.BIPOLAR)
         model = Model(
             name="test",
             model_id="test123",
@@ -119,8 +119,8 @@ class TestProcessMethod:
 
     def test_process_without_mixes(self):
         """_process() should copy raw_values to processed_values when no mixes."""
-        virtual_ctrl1 = VirtualControl(name="ctrl1", control_type=ControlType.BIPOLAR)
-        virtual_ctrl2 = VirtualControl(name="ctrl2", control_type=ControlType.BIPOLAR)
+        virtual_ctrl1 = TestControl(name="ctrl1", control_type=ControlType.BIPOLAR)
+        virtual_ctrl2 = TestControl(name="ctrl2", control_type=ControlType.BIPOLAR)
         model = Model(
             name="test",
             model_id="test123",
@@ -136,8 +136,8 @@ class TestProcessMethod:
 
     def test_process_with_differential_mix(self):
         """_process() should apply differential mixing."""
-        virtual_left = VirtualControl(name="left", control_type=ControlType.BIPOLAR)
-        virtual_right = VirtualControl(name="right", control_type=ControlType.BIPOLAR)
+        virtual_left = TestControl(name="left", control_type=ControlType.BIPOLAR)
+        virtual_right = TestControl(name="right", control_type=ControlType.BIPOLAR)
         model = Model(
             name="test",
             model_id="test123",
@@ -156,15 +156,17 @@ class TestProcessMethod:
         )
 
         # Test forward motion (both same)
+        # Formula: left = L + R, right = R - L
+        # Input: L=0.5, R=0.5 -> left=1.0, right=0.0
         model.raw_values = {"left_track": 0.5, "right_track": 0.5}
         model._process()
-        assert abs(model.processed_values["left_track"] - 0.5) < 1e-6
-        assert abs(model.processed_values["right_track"] - 0.5) < 1e-6
+        assert abs(model.processed_values["left_track"] - 1.0) < 1e-6
+        assert abs(model.processed_values["right_track"] - 0.0) < 1e-6
 
     def test_process_with_differential_mix_turn(self):
         """_process() should calculate turn correctly in differential mix."""
-        virtual_left = VirtualControl(name="left", control_type=ControlType.BIPOLAR)
-        virtual_right = VirtualControl(name="right", control_type=ControlType.BIPOLAR)
+        virtual_left = TestControl(name="left", control_type=ControlType.BIPOLAR)
+        virtual_right = TestControl(name="right", control_type=ControlType.BIPOLAR)
         model = Model(
             name="test",
             model_id="test123",
@@ -182,19 +184,17 @@ class TestProcessMethod:
         )
 
         # Forward + Turn: left=0.2, right=0.8
-        # forward = (0.2 + 0.8) / 2 = 0.5
-        # turn = (0.8 - 0.2) / 2 = 0.3
-        # new_left = 0.5 - 0.3 = 0.2
-        # new_right = 0.5 + 0.3 = 0.8
+        # Formula: left = L + R, right = R - L
+        # Input: L=0.2, R=0.8 -> left=1.0, right=0.6
         model.raw_values = {"left_track": 0.2, "right_track": 0.8}
         model._process()
-        assert abs(model.processed_values["left_track"] - 0.2) < 1e-6
-        assert abs(model.processed_values["right_track"] - 0.8) < 1e-6
+        assert abs(model.processed_values["left_track"] - 1.0) < 1e-6
+        assert abs(model.processed_values["right_track"] - 0.6) < 1e-6
 
     def test_process_with_differential_mix_inverse(self):
         """_process() should swap outputs when inverse=True."""
-        virtual_left = VirtualControl(name="left", control_type=ControlType.BIPOLAR)
-        virtual_right = VirtualControl(name="right", control_type=ControlType.BIPOLAR)
+        virtual_left = TestControl(name="left", control_type=ControlType.BIPOLAR)
+        virtual_right = TestControl(name="right", control_type=ControlType.BIPOLAR)
         model = Model(
             name="test",
             model_id="test123",
@@ -215,14 +215,16 @@ class TestProcessMethod:
         model.raw_values = {"left_track": 0.2, "right_track": 0.8}
         model._process()
         # With inverse, the values should be swapped
-        assert abs(model.processed_values["left_track"] - 0.8) < 1e-6
-        assert abs(model.processed_values["right_track"] - 0.2) < 1e-6
+        # Normal would be: left=1.0, right=0.6
+        # Inverse swaps them: left=0.6, right=1.0
+        assert abs(model.processed_values["left_track"] - 0.6) < 1e-6
+        assert abs(model.processed_values["right_track"] - 1.0) < 1e-6
 
     def test_process_with_aggregate_mix(self):
         """_process() should apply aggregate mixing."""
-        virtual_ch1 = VirtualControl(name="ch1", control_type=ControlType.BIPOLAR)
-        virtual_ch2 = VirtualControl(name="ch2", control_type=ControlType.BIPOLAR)
-        virtual_sound = VirtualControl(name="sound", control_type=ControlType.UNIPOLAR)
+        virtual_ch1 = TestControl(name="ch1", control_type=ControlType.BIPOLAR)
+        virtual_ch2 = TestControl(name="ch2", control_type=ControlType.BIPOLAR)
+        virtual_sound = TestControl(name="sound", control_type=ControlType.UNIPOLAR)
         model = Model(
             name="test",
             model_id="test123",
@@ -250,9 +252,9 @@ class TestProcessMethod:
 
     def test_process_with_aggregate_mix_clamping(self):
         """_process() should clamp aggregate values to [0, 1]."""
-        virtual_ch1 = VirtualControl(name="ch1", control_type=ControlType.BIPOLAR)
-        virtual_ch2 = VirtualControl(name="ch2", control_type=ControlType.BIPOLAR)
-        virtual_sound = VirtualControl(name="sound", control_type=ControlType.UNIPOLAR)
+        virtual_ch1 = TestControl(name="ch1", control_type=ControlType.BIPOLAR)
+        virtual_ch2 = TestControl(name="ch2", control_type=ControlType.BIPOLAR)
+        virtual_sound = TestControl(name="sound", control_type=ControlType.UNIPOLAR)
         model = Model(
             name="test",
             model_id="test123",
@@ -284,7 +286,7 @@ class TestPostProcessMethod:
 
     def test_post_process_without_reversing(self):
         """_postProcess() should not modify values when no reversing."""
-        virtual_ctrl = VirtualControl(name="ctrl", control_type=ControlType.BIPOLAR)
+        virtual_ctrl = TestControl(name="ctrl", control_type=ControlType.BIPOLAR)
         model = Model(
             name="test",
             model_id="test123",
@@ -297,7 +299,7 @@ class TestPostProcessMethod:
 
     def test_post_process_with_bipolar_reversing(self):
         """_postProcess() should negate bipolar values when reversed."""
-        virtual_ctrl = VirtualControl(name="ctrl", control_type=ControlType.BIPOLAR)
+        virtual_ctrl = TestControl(name="ctrl", control_type=ControlType.BIPOLAR)
         model = Model(
             name="test",
             model_id="test123",
@@ -310,7 +312,7 @@ class TestPostProcessMethod:
 
     def test_post_process_with_unipolar_reversing(self):
         """_postProcess() should invert unipolar values when reversed."""
-        virtual_ctrl = VirtualControl(name="ctrl", control_type=ControlType.UNIPOLAR)
+        virtual_ctrl = TestControl(name="ctrl", control_type=ControlType.UNIPOLAR)
         model = Model(
             name="test",
             model_id="test123",
@@ -323,7 +325,7 @@ class TestPostProcessMethod:
 
     def test_post_process_applies_endpoints(self):
         """_postProcess() should clamp values to endpoint range."""
-        virtual_ctrl = VirtualControl(name="ctrl", control_type=ControlType.BIPOLAR)
+        virtual_ctrl = TestControl(name="ctrl", control_type=ControlType.BIPOLAR)
         model = Model(
             name="test",
             model_id="test123",
@@ -354,7 +356,7 @@ class TestPostProcessMethod:
 
     def test_post_process_applies_reversing_before_endpoints(self):
         """_postProcess() should reverse first, then clamp."""
-        virtual_ctrl = VirtualControl(name="ctrl", control_type=ControlType.BIPOLAR)
+        virtual_ctrl = TestControl(name="ctrl", control_type=ControlType.BIPOLAR)
         model = Model(
             name="test",
             model_id="test123",
@@ -380,7 +382,7 @@ class TestIntegratedProcessing:
 
     def test_read_values_full_pipeline_no_mixes(self):
         """readValues() should process values through all stages."""
-        virtual_ctrl = VirtualControl(name="ctrl", control_type=ControlType.BIPOLAR)
+        virtual_ctrl = TestControl(name="ctrl", control_type=ControlType.BIPOLAR)
         model = Model(
             name="test",
             model_id="test123",
@@ -402,8 +404,8 @@ class TestIntegratedProcessing:
 
     def test_read_values_with_differential_and_reversing(self):
         """readValues() should apply mixes then reversing."""
-        virtual_left = VirtualControl(name="left", control_type=ControlType.BIPOLAR)
-        virtual_right = VirtualControl(name="right", control_type=ControlType.BIPOLAR)
+        virtual_left = TestControl(name="left", control_type=ControlType.BIPOLAR)
+        virtual_right = TestControl(name="right", control_type=ControlType.BIPOLAR)
         model = Model(
             name="test",
             model_id="test123",
@@ -420,18 +422,19 @@ class TestIntegratedProcessing:
             channels=Channels(),
         )
 
-        # After diff mix: left=0.6, right=0.4
-        # After reversing: left=-0.6, right=0.4
+        # Input: left=0.6, right=0.4
+        # After diff mix: left=1.0, right=-0.2
+        # After reversing (bipolar): left=-1.0, right=-0.2
         model.raw_values = {"left_track": 0.6, "right_track": 0.4}
         result = model.readValues()
-        assert abs(result["left_track"] - (-0.6)) < 1e-6
-        assert abs(result["right_track"] - 0.4) < 1e-6
+        assert abs(result["left_track"] - (-1.0)) < 1e-6
+        assert abs(result["right_track"] - (-0.2)) < 1e-6
 
     def test_read_values_complex_model(self):
         """readValues() with differential mix, aggregate mix, reversing, and endpoints."""
-        virtual_left = VirtualControl(name="left", control_type=ControlType.BIPOLAR)
-        virtual_right = VirtualControl(name="right", control_type=ControlType.BIPOLAR)
-        virtual_sound = VirtualControl(name="sound", control_type=ControlType.UNIPOLAR)
+        virtual_left = TestControl(name="left", control_type=ControlType.BIPOLAR)
+        virtual_right = TestControl(name="right", control_type=ControlType.BIPOLAR)
+        virtual_sound = TestControl(name="sound", control_type=ControlType.UNIPOLAR)
 
         model = Model(
             name="complex",
@@ -470,17 +473,18 @@ class TestIntegratedProcessing:
         model.raw_values = {"left_track": 0.6, "right_track": 0.4, "sound": 0.0}
         result = model.readValues()
 
-        # After differential: left=0.6, right=0.4
-        # After aggregate: sound = |0.6|*0.5 + |0.4|*0.5 = 0.5
-        # After reversing: left=-0.6, right=0.4, sound=0.5
-        # After endpoints: all within range
-        assert abs(result["left_track"] - (-0.6)) < 1e-6
-        assert abs(result["right_track"] - 0.4) < 1e-6
-        assert abs(result["sound"] - 0.5) < 1e-6
+        # Input: left=0.6, right=0.4
+        # After differential: left=1.0, right=-0.2
+        # After aggregate (uses post-mix values): sound = |1.0|*0.5 + |-0.2|*0.5 = 0.6
+        # After reversing (bipolar): left=-1.0, right=-0.2, sound=0.6
+        # After endpoints: left=-0.8 (clamped), right=-0.2, sound=0.6
+        assert abs(result["left_track"] - (-0.8)) < 1e-6
+        assert abs(result["right_track"] - (-0.2)) < 1e-6
+        assert abs(result["sound"] - 0.6) < 1e-6
 
     def test_read_values_multiple_calls(self):
         """readValues() should be idempotent with same raw_values."""
-        virtual_ctrl = VirtualControl(name="ctrl", control_type=ControlType.BIPOLAR)
+        virtual_ctrl = TestControl(name="ctrl", control_type=ControlType.BIPOLAR)
         model = Model(
             name="test",
             model_id="test123",
@@ -497,7 +501,7 @@ class TestIntegratedProcessing:
 
     def test_read_values_updates_with_new_raw_values(self):
         """readValues() should reflect changes to raw_values."""
-        virtual_ctrl = VirtualControl(name="ctrl", control_type=ControlType.BIPOLAR)
+        virtual_ctrl = TestControl(name="ctrl", control_type=ControlType.BIPOLAR)
         model = Model(
             name="test",
             model_id="test123",
@@ -519,8 +523,8 @@ class TestEdgeCases:
 
     def test_process_handles_missing_channel_in_raw_values(self):
         """_process() should only process channels present in raw_values or mixes."""
-        virtual_ctrl1 = VirtualControl(name="ctrl1", control_type=ControlType.BIPOLAR)
-        virtual_ctrl2 = VirtualControl(name="ctrl2", control_type=ControlType.BIPOLAR)
+        virtual_ctrl1 = TestControl(name="ctrl1", control_type=ControlType.BIPOLAR)
+        virtual_ctrl2 = TestControl(name="ctrl2", control_type=ControlType.BIPOLAR)
         model = Model(
             name="test",
             model_id="test123",
@@ -545,8 +549,8 @@ class TestEdgeCases:
 
     def test_post_process_handles_missing_channel_in_processed_values(self):
         """_postProcess() should use 0.0 for missing channels."""
-        virtual_ctrl1 = VirtualControl(name="ctrl1", control_type=ControlType.BIPOLAR)
-        virtual_ctrl2 = VirtualControl(name="ctrl2", control_type=ControlType.BIPOLAR)
+        virtual_ctrl1 = TestControl(name="ctrl1", control_type=ControlType.BIPOLAR)
+        virtual_ctrl2 = TestControl(name="ctrl2", control_type=ControlType.BIPOLAR)
         model = Model(
             name="test",
             model_id="test123",
